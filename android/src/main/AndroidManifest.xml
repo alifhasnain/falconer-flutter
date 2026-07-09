@@ -1,0 +1,7 @@
+<!-- The thin plugin declares NO inspector components. The Activity, receiver,
+     FileProvider, and POST_NOTIFICATIONS permission now live in the falconer-impl
+     AAR's manifest, which is merged ONLY into debug builds (debugImplementation).
+     A release build links falconer-noop (no manifest), so none of them reach the
+     release app — the whole point of Method A (RELEASE_STRIPPING.md §3.3).
+     Namespace comes from build.gradle (AGP 8 rejects a package= attr here). -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" />

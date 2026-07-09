@@ -1,0 +1,13 @@
+# Gradle wrapper is committed so CI (and fresh clones) can run ./gradlew —
+# the plugin has no root gradle; example/android hosts the build.
+/.gradle
+/captures/
+/local.properties
+GeneratedPluginRegistrant.java
+.cxx/
+
+# Remember to never publicly share your keystore.
+# See https://flutter.dev/to/reference-keystore
+key.properties
+**/*.keystore
+**/*.jks

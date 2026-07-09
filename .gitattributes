@@ -1,0 +1,6 @@
+# The Gradle wrapper script must stay LF — CI runs it under bash; CRLF would
+# break the shebang ("bad interpreter").
+gradlew text eol=lf
+*.sh text eol=lf
+gradlew.bat text eol=crlf
+*.bat text eol=crlf

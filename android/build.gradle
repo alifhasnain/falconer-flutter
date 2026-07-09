@@ -1,0 +1,101 @@
+group = "dev.alifhasnain.falconer"
+version = "1.0-SNAPSHOT"
+
+// The falconer-android artifacts (published on JitPack) that provide the engine.
+// Kept on one version, in lockstep — the no-op's interface must match core.
+ext.falconer_version = "0.1.0"
+
+buildscript {
+    ext.kotlin_version = "2.1.0"
+    repositories {
+        google()
+        mavenCentral()
+    }
+
+    dependencies {
+        classpath("com.android.tools.build:gradle:8.9.1")
+        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version")
+        // No Compose / SQLDelight plugins here anymore — those are impl concerns,
+        // and impl now lives in the falconer-android artifacts, not this module.
+    }
+}
+
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+        // The engine artifacts (falconer-core/impl/noop) are published on JitPack.
+        maven { url "https://jitpack.io" }
+    }
+}
+
+apply plugin: "com.android.library"
+apply plugin: "kotlin-android"
+
+// falconer-impl (linked for debug) transitively pulls SQLDelight -> a newer
+// kotlin-stdlib than our pinned Kotlin 2.1.0 compiler. On AGP 8.9.1 the 2.2
+// metadata jams R8/D8 and floods mergeExtDex. Pin the stdlib down so the dexed
+// metadata stays at 2.1. (Release links the no-op, which has no such transitive,
+// but keeping the force unconditional is harmless and matches the impl module.)
+configurations.all {
+    resolutionStrategy {
+        force "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
+        force "org.jetbrains.kotlin:kotlin-stdlib-common:$kotlin_version"
+        force "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
+        force "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlin_version"
+    }
+}
+
+android {
+    namespace = "dev.alifhasnain.falconer"
+
+    compileSdk = 36
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = "17"
+    }
+
+    sourceSets {
+        main.java.srcDirs += "src/main/kotlin"
+        test.java.srcDirs += "src/test/kotlin"
+    }
+
+    defaultConfig {
+        minSdk = 21
+    }
+
+    dependencies {
+        // The seam + the engine, swapped per build variant. This is Method A:
+        //   debug   -> falconer-impl (full inspector)   release -> falconer-noop (empty)
+        // Because the plugin only references falconer-core's FalconerEngine, a
+        // release build has no live edge to the impl and R8 strips it entirely.
+        api                   "com.github.alifhasnain.falconer-android:falconer-core:$falconer_version"
+        debugImplementation   "com.github.alifhasnain.falconer-android:falconer-impl:$falconer_version"
+        releaseImplementation "com.github.alifhasnain.falconer-android:falconer-noop:$falconer_version"
+
+        // Kept in the thin plugin: channel wiring + notification-permission flow.
+        implementation "androidx.core:core-ktx:1.13.1"
+        implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0"
+
+        testImplementation "org.jetbrains.kotlin:kotlin-test"
+        testImplementation "org.mockito:mockito-core:5.0.0"
+        testImplementation "org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0"
+    }
+
+    testOptions {
+        unitTests.all {
+            useJUnitPlatform()
+
+            testLogging {
+               events "passed", "skipped", "failed", "standardOut", "standardError"
+               outputs.upToDateWhen {false}
+               showStandardStreams = true
+            }
+        }
+    }
+}
