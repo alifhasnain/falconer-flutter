@@ -39,7 +39,7 @@ dependencies:
   dio: ^5.7.0
   falconer:
     git:
-      url: https://github.com/alifhasnain/falconer.git
+      url: https://github.com/alifhasnain/falconer-flutter.git
       ref: v0.1.0   # or `main` to track the latest
 ```
 
