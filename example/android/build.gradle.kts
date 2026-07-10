@@ -1,11 +1,9 @@
 allprojects {
     repositories {
         google()
+        // Falconer's native engine artifacts (io.github.alifhasnain:falconer-*)
+        // are on Maven Central, so no extra repo is needed here.
         mavenCentral()
-        // Falconer's native engine artifacts (falconer-core/impl/noop) ship on
-        // JitPack. Any app consuming the plugin needs this repo so the app's own
-        // classpath can resolve the plugin's transitive engine dependencies.
-        maven { url = uri("https://jitpack.io") }
     }
 }
 

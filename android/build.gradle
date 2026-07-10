@@ -1,8 +1,9 @@
 group = "dev.alifhasnain.falconer"
 version = "1.0-SNAPSHOT"
 
-// The falconer-android artifacts (published on JitPack) that provide the engine.
-// Kept on one version, in lockstep — the no-op's interface must match core.
+// The falconer-android artifacts (Maven Central, io.github.alifhasnain) that
+// provide the engine. One version, in lockstep — the no-op's interface must
+// match core. Bump this together with the pub package version on each release.
 ext.falconer_version = "0.1.0"
 
 buildscript {
@@ -23,9 +24,8 @@ buildscript {
 allprojects {
     repositories {
         google()
+        // The engine artifacts (falconer-core/impl/noop) are on Maven Central.
         mavenCentral()
-        // The engine artifacts (falconer-core/impl/noop) are published on JitPack.
-        maven { url "https://jitpack.io" }
     }
 }
 
@@ -74,9 +74,9 @@ android {
         //   debug   -> falconer-impl (full inspector)   release -> falconer-noop (empty)
         // Because the plugin only references falconer-core's FalconerEngine, a
         // release build has no live edge to the impl and R8 strips it entirely.
-        api                   "com.github.alifhasnain.falconer-android:falconer-core:$falconer_version"
-        debugImplementation   "com.github.alifhasnain.falconer-android:falconer-impl:$falconer_version"
-        releaseImplementation "com.github.alifhasnain.falconer-android:falconer-noop:$falconer_version"
+        api                   "io.github.alifhasnain:falconer-core:$falconer_version"
+        debugImplementation   "io.github.alifhasnain:falconer-impl:$falconer_version"
+        releaseImplementation "io.github.alifhasnain:falconer-noop:$falconer_version"
 
         // Kept in the thin plugin: channel wiring + notification-permission flow.
         implementation "androidx.core:core-ktx:1.13.1"
