@@ -5,14 +5,15 @@ client. Add one interceptor and inspect every request/response in a native
 on-device UI — method, URL, headers, bodies, timing, status — with search,
 JSON pretty-printing, image preview and cURL/text export.
 
-> **v1 is Android-only**, with an iOS-ready architecture (all capture and
-> redaction logic is pure Dart behind a platform interface).
+> **Android and iOS supported.** All capture and redaction logic is pure Dart
+> behind a platform interface; each platform has a native inspection UI
+> (Jetpack Compose on Android, SwiftUI on iOS).
 
 ## Status
 
-**v0.1.0 — first development release.** Feature-complete on Android: capture,
-storage, the native inspection UI, search and export all work. The API is
-pre-1.0 and may change. iOS is not yet implemented.
+**v0.2.0 — development release.** Feature-complete on **Android and iOS**:
+capture, storage, the native inspection UI, search and export all work on both.
+The API is pre-1.0 and may change.
 
 ## Features
 
@@ -28,7 +29,8 @@ pre-1.0 and may change. iOS is not yet implemented.
 ## Requirements
 
 - Flutter 3.35.4+ / Dart 3.9+
-- Android `minSdk 21`, `compileSdk 36`, Kotlin 2.1.x, Jetpack Compose
+- Android: `minSdk 21`, `compileSdk 36`, Kotlin 2.1.x, Jetpack Compose
+- iOS: deployment target **15.0+**, SwiftUI (Xcode 15+)
 
 ## Install
 
@@ -40,8 +42,12 @@ dependencies:
   falconer:
     git:
       url: https://github.com/alifhasnain/falconer-flutter.git
-      ref: 0.1.0   # or `main` to track the latest
+      ref: 0.2.0   # or `main` to track the latest
 ```
+
+On iOS this is a one-line install — the native inspector ships inside the plugin
+pod and `flutter build ipa --release` strips it automatically (see below); no
+Podfile edit is required for the default path.
 
 ## Usage
 
@@ -57,8 +63,11 @@ void main() {
 }
 ```
 
-Open the inspector by tapping the Falconer notification, or call
-`Falconer.launchUi()`.
+Open the inspector by calling `Falconer.launchUi()`, or:
+
+- **Android** — tap the Falconer notification.
+- **iOS** — **shake the device** (debug builds), since iOS has no
+  notification-to-task model. `showNotification` is a no-op on iOS.
 
 ## Security & data privacy
 
@@ -73,6 +82,21 @@ Falconer persists captured HTTP data **on the device**.
   payment/PCI-DSS contexts, exclude such endpoints from capture and keep
   release capture disabled. Body-content redaction patterns are not yet
   implemented.
+- **The inspector is physically absent from release builds on both platforms.**
+  Android strips it via build-variant-scoped native artifacts + R8; iOS compiles
+  the whole inspector behind `#if DEBUG`, so a release IPA contains no capture,
+  storage or UI code (verified by symbol inspection). The on-device database
+  surface does not exist in release.
+
+### iOS: advanced stripping (Option B)
+
+The default iOS mechanism (`#if DEBUG`) relies on the `DEBUG` compilation
+condition being unset in Release, which is true for standard Flutter builds.
+Teams with custom build configurations or a hard audit requirement can instead
+ship the inspector as a separate Debug-only pod and look it up at runtime; this
+decouples stripping from the `DEBUG` macro at the cost of a one-line Podfile
+edit. See `DOCUMENTATION.md` for details. Both paths keep the Dart runtime gate
+(`enableInReleaseBuilds`) as defence in depth.
 
 ## Example
 

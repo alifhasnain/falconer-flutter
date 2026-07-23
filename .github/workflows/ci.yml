@@ -42,6 +42,46 @@ jobs:
       - run: ./gradlew :falconer:testDebugUnitTest
         working-directory: example/android
 
+  ios:
+    name: iOS build, strip-check & XCTest
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.35.4
+          channel: stable
+      - run: flutter pub get
+      - run: flutter pub get
+        working-directory: example
+      - name: Build (debug, simulator) — compile gate
+        working-directory: example
+        run: flutter build ios --debug --simulator
+      - name: Swift unit tests (contract, mapper, config, DAO, export)
+        working-directory: example/ios
+        run: |
+          xcodebuild test -workspace Runner.xcworkspace -scheme Runner \
+            -destination 'platform=iOS Simulator,name=iPhone 15' \
+            -only-testing:RunnerTests
+      - name: Build (release) — must strip the inspector
+        working-directory: example
+        run: flutter build ios --release --no-codesign
+      - name: Verify inspector is absent from the release binary
+        working-directory: example
+        run: |
+          BIN=build/ios/iphoneos/Runner.app/Frameworks/falconer.framework/falconer
+          fail=0
+          for s in RealFalconerEngine SQLiteDatabase TransactionStore InspectorRootView TransactionDetailView; do
+            if nm "$BIN" 2>/dev/null | grep -q "$s" || strings -a "$BIN" | grep -q "$s"; then
+              echo "FAIL: '$s' present in release binary"; fail=1
+            fi
+          done
+          if otool -L "$BIN" | grep -qi sqlite; then
+            echo "FAIL: libsqlite3 linked in release"; fail=1
+          fi
+          [ "$fail" = 0 ] && echo "OK: inspector types + libsqlite3 absent from release"
+          exit $fail
+
   pana:
     name: pub score (pana)
     runs-on: ubuntu-latest

@@ -1,0 +1,28 @@
+PODS:
+  - falconer (0.2.0):
+    - Flutter
+  - Flutter (1.0.0)
+  - integration_test (0.0.1):
+    - Flutter
+
+DEPENDENCIES:
+  - falconer (from `.symlinks/plugins/falconer/ios`)
+  - Flutter (from `Flutter`)
+  - integration_test (from `.symlinks/plugins/integration_test/ios`)
+
+EXTERNAL SOURCES:
+  falconer:
+    :path: ".symlinks/plugins/falconer/ios"
+  Flutter:
+    :path: Flutter
+  integration_test:
+    :path: ".symlinks/plugins/integration_test/ios"
+
+SPEC CHECKSUMS:
+  falconer: 7e55c636503ecadaecddc8548fff58d9fd777ca1
+  Flutter: cabc95a1d2626b1b06e7179b784ebcf0c0cde467
+  integration_test: 4a889634ef21a45d28d50d622cf412dc6d9f586e
+
+PODFILE CHECKSUM: d8ffce5e539636d68be630e92cef041ca850eb05
+
+COCOAPODS: 1.16.2

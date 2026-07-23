@@ -1,3 +1,35 @@
+## 0.2.0
+
+Adds **iOS support** at feature parity with Android. No consumer API changes —
+the shared Dart capture pipeline is unchanged, so the same `FalconerInterceptor`
+and `Falconer.configure(...)` work on both platforms.
+
+### Added
+
+* **iOS backend** (Swift / SwiftUI): capture ingestion, system-`libsqlite3`
+  storage with configurable retention and a live count, and a native inspection
+  UI (list → detail tabs → in-body search with highlight, JSON pretty-print,
+  image preview). Minimum deployment target **iOS 15**.
+* **Export on iOS.** Share a transaction as cURL or text via the iOS share sheet
+  (`UIActivityViewController`).
+* **Entry points on iOS.** `Falconer.launchUi()` presents the inspector in its
+  own window; **shake-to-open** is wired in debug builds (iOS has no
+  notification-to-task model like Android).
+* **iOS release stripping (Method A).** The entire inspector is compiled behind
+  `#if DEBUG`, so a release IPA contains **no** inspector code — verified by
+  symbol inspection (`nm`/`strings`): `RealFalconerEngine`, the SQLite wrapper
+  and the SwiftUI views are absent from release; only the inert
+  `NoOpFalconerEngine` and the thin plugin remain. No third-party pod, and
+  `libsqlite3` is linked in Debug only.
+
+### Notes
+
+* iOS ships inside the plugin pod — there is no separate native artifact
+  repository (unlike Android/Maven), so the Android engine coordinate
+  (`io.github.alifhasnain:*`) stays at `0.1.0`.
+* `showNotification` is a no-op on iOS; `requestNotificationPermission()`
+  resolves `true` (nothing to grant — the entry point is shake + `launchUi`).
+
 ## 0.1.0
 
 First development release. Android-only; the API is pre-1.0 and may change.
