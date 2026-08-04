@@ -1,5 +1,3 @@
-import 'package:flutter/foundation.dart';
-
 import 'config/falconer_config.dart';
 import 'falconer_runtime.dart' as runtime;
 import 'platform/falconer_platform.dart';
@@ -18,13 +16,12 @@ class Falconer {
   /// Configures Falconer. Call once at startup, before requests fire.
   ///
   /// Caches the resolved enabled flag and redaction/truncation settings for the
-  /// interceptor, warns once if capture is active in a release build, then
-  /// forwards the config to the native backstop.
+  /// interceptor, then forwards the config to the native backstop. In a release
+  /// build the resolved state is always disabled, so this is a cheap no-op.
   static Future<void> configure([
     FalconerConfig config = const FalconerConfig(),
   ]) {
     runtime.applyConfig(config);
-    runtime.maybeWarnReleaseCapture(config, isRelease: kReleaseMode);
     return FalconerPlatform.instance.configure(config.toMap());
   }
 

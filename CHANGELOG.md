@@ -1,3 +1,29 @@
+## 0.3.0
+
+Makes debug-only capture a **structural guarantee** instead of a default that
+could be flipped. Dart-only change — no native code, no channel-contract change;
+the Android engine coordinate stays at `0.1.0`.
+
+### Removed — BREAKING
+
+* **`FalconerConfig.enableInReleaseBuilds` is gone.** `resolveEnabled` now
+  returns `false` for every release build, so no configuration can enable
+  capture in release — `enabled: true` included. `enabled` remains, honoured in
+  debug builds only.
+
+  The removed flag never delivered a working inspector in release anyway: the
+  native engine is absent from release builds on both platforms (Method A), so
+  setting it `true` only re-enabled the Dart hot path and paid for payloads that
+  the no-op engine discarded. Removing it deletes a footgun rather than a
+  feature.
+
+  *Migration:* delete `enableInReleaseBuilds:` from your `FalconerConfig(...)`.
+  If you need capture in a non-debug build, `DOCUMENTATION.md §7` documents the
+  consumer-side build edits for a staging flavour.
+
+* `maybeWarnReleaseCapture` / `releaseCaptureWarned` (internal) removed — the
+  condition they warned about is now unreachable.
+
 ## 0.2.0
 
 Adds **iOS support** at feature parity with Android. No consumer API changes —

@@ -24,16 +24,11 @@ redaction, and the on-device inspection UI.
 flutter run
 ```
 
-Capture is **debug-only by default**. To try it in a release build, uncomment
-the explicit opt-in block in `main()`:
+Capture is **debug-only, structurally**. There is no release opt-in: passing
+`enabled: true` still resolves to disabled in a release build, and the native
+engine is absent from release binaries anyway (Method A). `flutter run --release`
+will show no inspector — that is the design working, not a misconfiguration.
 
-```dart
-await Falconer.configure(const FalconerConfig(
-  enabled: true,
-  enableInReleaseBuilds: true,
-));
-```
-
-> ⚠️ Enabling release capture persists HTTP request/response data on-device.
-> Ensure auth/PII headers are redacted and do **not** capture cardholder data
-> (PCI-DSS). See the root README and `doc/PLAN.md`.
+> Header *names* are redacted before capture; body **content** is not. Do not
+> point a debug build at endpoints carrying cardholder data (PAN/CVV) or other
+> regulated PII. See the root README's security section.

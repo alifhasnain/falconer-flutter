@@ -15,7 +15,8 @@
 Falconer is a **Chucker-style HTTP inspector for the Dio client** in Flutter. It
 captures every HTTP request/response/error your app makes through Dio and lets you
 inspect them — method, URL, headers, bodies, status, timing — in a **native
-Android inspection UI**, with search and export.
+inspection UI** (Jetpack Compose on Android, SwiftUI on iOS), with search and
+export.
 
 - **Android and iOS** are both supported (Dart interceptor + native inspection
   UI — Jetpack Compose on Android, SwiftUI on iOS). The platform boundary is a
@@ -63,7 +64,7 @@ the full rationale.
  ┌───────────────────────────── DART (this repo, lib/) ─────────────────────────────┐
  │  Dio ──▶ FalconerInterceptor ──▶ capture (DTO/codec/sink) ──▶ MethodChannel        │
  │            │                                                     "falconer"        │
- │            └── runtime gate: kReleaseMode / enableInReleaseBuilds (short-circuit)  │
+ │            └── runtime gate: kReleaseMode ⇒ always disabled (short-circuit)        │
  └───────────────────────────────────────────────┬──────────────────────────────────┘
                                                   │ platform channel
  ┌────────────────────── NATIVE (this repo, android/) ──────────────────────────────┐
@@ -97,7 +98,7 @@ The public API is exported from `lib/falconer.dart`. Internals live in `lib/src/
 
 | Area | Files | Responsibility |
 |------|-------|----------------|
-| **Facade / runtime** | `src/falconer.dart`, `src/falconer_runtime.dart` | Entry point; resolves config against `kReleaseMode` and the **`enableInReleaseBuilds`** gate. |
+| **Facade / runtime** | `src/falconer.dart`, `src/falconer_runtime.dart` | Entry point; resolves config against `kReleaseMode` — **release always resolves to disabled**. |
 | **Config** | `src/config/falconer_config.dart`, `retention_period.dart` | Redaction rules, max body length, retention window, notification toggle. |
 | **Interceptor** | `src/interceptor/falconer_interceptor.dart`, `transaction_id.dart` | The Dio `Interceptor` — hooks onRequest/onResponse/onError, assigns a stable id. |
 | **Capture** | `src/capture/transaction_dto.dart`, `body_codec.dart`, `transaction_sink.dart` | Turns Dio events into serializable payloads; encodes bodies; redacts/truncates. |
@@ -105,10 +106,12 @@ The public API is exported from `lib/falconer.dart`. Internals live in `lib/src/
 
 Key behaviours:
 
-- **The runtime gate.** `enableInReleaseBuilds` (resolved against `kReleaseMode`)
-  short-circuits the interceptor's hot path — in a disabled build, **no payload is
-  even marshalled** toward the channel. This is defence-in-depth *on top of* the
-  native stripping.
+- **The runtime gate.** `FalconerConfig.resolveEnabled` returns `false` for every
+  release build — there is no configuration that can override it (`0.3.0` removed
+  the old `enableInReleaseBuilds` opt-in). The resolved flag short-circuits the
+  interceptor's hot path, so in a release build **no payload is even marshalled**
+  toward the channel. This is defence-in-depth *on top of* the native stripping,
+  and it is now a structural guarantee rather than a default someone can flip.
 - **Redaction & truncation happen in Dart first** (before crossing the channel),
   and are enforced again natively as a backstop.
 - **Contract mirroring.** The channel method names and payload keys are defined once
@@ -182,9 +185,14 @@ cd example/android && ./gradlew :falconer:testDebugUnitTest
 # iOS (macOS host only):
 cd example && flutter build ios --debug --simulator     # compile gate
 cd example && flutter build ios --release --no-codesign  # release must strip the inspector
-# Swift unit tests (contract drift-guard + mapper/config/redaction/DAO/export):
+# Swift unit tests (contract drift-guard + mapper/config/redaction/DAO/export/shake):
 cd example/ios && xcodebuild test -workspace Runner.xcworkspace -scheme Runner \
-  -destination 'platform=iOS Simulator,name=iPhone 16' -only-testing:RunnerTests
+  -destination 'platform=iOS Simulator,name=iPhone 15' -only-testing:RunnerTests
+
+# iOS strip proof (after the release build above):
+nm build/ios/iphoneos/Runner.app/Frameworks/falconer.framework/falconer | grep RealFalconerEngine
+otool -L build/ios/iphoneos/Runner.app/Frameworks/falconer.framework/falconer | grep -i sqlite
+# both must print nothing
 
 # Dart:
 dart format .          # CI runs --set-exit-if-changed
@@ -192,12 +200,19 @@ flutter analyze
 flutter test
 ```
 
-**CI** (`.github/workflows/ci.yml`) runs three jobs on every push to `main` and
+**CI** (`.github/workflows/ci.yml`) runs four jobs on every push to `main` and
 every PR:
-1. `dart` — format check, `flutter analyze`, `flutter test`.
+1. `dart` — format check, `flutter analyze`, `flutter test` (ubuntu).
 2. `android-unit` — `:falconer:testDebugUnitTest` (resolves the engine from Maven
-   Central).
-3. `pana` — pub.dev score gate (fails if the package loses > 20 points).
+   Central; writes `local.properties` first because `settings.gradle.kts` needs
+   `flutter.sdk` and that file is gitignored).
+3. `ios` (macos-14) — debug simulator build, `xcodebuild test -only-testing:RunnerTests`,
+   release build, then an **automated strip check**: `nm`/`strings` must not find
+   `RealFalconerEngine`, `SQLiteDatabase`, `TransactionStore`, `InspectorRootView`
+   or `TransactionDetailView` in the release framework binary, and `otool -L` must
+   not show `libsqlite3`. The job fails if any is present — the stripping guarantee
+   is enforced, not just asserted in prose (§13.3).
+4. `pana` — pub.dev score gate (fails if the package loses > 20 points).
 
 ---
 
@@ -227,6 +242,9 @@ Three version strings move **together** on every release:
 1. `pubspec.yaml` → `version:` (the plugin/pub version).
 2. `android/build.gradle` → `ext.falconer_version` (the Maven engine coordinate).
 3. `falconer-android` → `VERSION_NAME` (the published artifact version).
+
+`ios/falconer.podspec` → `s.version` tracks the **pub** version (1), not the
+Maven engine version — the iOS native code ships inside the pod. See §13.9.
 
 Release steps:
 1. Publish the native artifacts first — see `falconer-android/DOCUMENTATION.md §7`.
@@ -283,7 +301,10 @@ it.
 - **Repos:** `alifhasnain/falconer-flutter` (plugin) · `alifhasnain/falconer-android` (engine)
 - **Toolchain:** Kotlin 2.1.0 · AGP 8.9.1 · Gradle 8.12 · SQLDelight 2.2.1 ·
   compileSdk/targetSdk 36 · minSdk 21 · jvmTarget 17 · Flutter 3.35.4
-- **iOS toolchain:** Swift 5 · SwiftUI · system `libsqlite3` · min iOS 15
+- **iOS toolchain:** Swift 5 · SwiftUI · system `libsqlite3` (no third-party pod) ·
+  min iOS 15 · CI on macos-14 / iPhone 15 simulator
+- **iOS DB path:** `Application Support/falconer.db` (WAL, single connection)
+- **iOS debug entry point:** device shake (`.falconerShake`) or `Falconer.launchUi()`
 - **License:** MIT
 
 ---
@@ -301,12 +322,16 @@ debug/release-scoped deps were emulating: the C preprocessor.
 | Plugin language | Kotlin | Swift (`ios/Classes/FalconerPlugin.swift`) |
 | Channels | `MethodChannel` / `EventChannel` | `FlutterMethodChannel` / `FlutterEventChannel` |
 | Engine discovery | `ServiceLoader` (runtime) | **`#if DEBUG` (compile time)** |
+| Inert release engine | `falconer-noop` AAR | `NoOpFalconerEngine.swift` (same file, other branch) |
 | Storage | SQLDelight | system **`libsqlite3`** via a thin Swift wrapper |
-| UI | Compose + `FalconerActivity` (own task) | **SwiftUI** in its own `UIWindow` |
+| DB location | app database dir | `Application Support/falconer.db` (WAL) |
+| UI | Compose + `FalconerActivity` (own task) | **SwiftUI** in its own `UIWindow` (`windowLevel = .normal + 1`) |
+| Navigation | Activity + Compose nav | `NavigationView(.stack)` (deployment target is iOS 15, so **not** `NavigationStack`) |
 | Live count | `Flow<Int>` → EventChannel | `AsyncStream<Int>` → EventChannel |
-| Export/share | `Intent` share sheet | `UIActivityViewController` |
+| Search highlight | `AnnotatedString` + `SpanStyle` | `AttributedString` + `backgroundColor` |
+| Export/share | `Intent` share sheet | `UIActivityViewController` (via `ShareSheet`) |
 | Entry point | notification tap | **shake** (debug) + `launchUi` |
-| Notifications | ongoing summary notification | not implemented (`showNotification` is a no-op) |
+| Notifications | ongoing summary notification | **not implemented** — see §13.7 |
 
 The Dart layer (interceptor, DTO builders, redaction/truncation, contract) is
 **reused verbatim**; iOS work was purely the native sink, storage, UI, and the
@@ -315,14 +340,27 @@ backstop with byte-identical markers (`**redacted**`, the truncation line).
 
 ### 13.2 File layout (`ios/Classes/`)
 
-- `FalconerPlugin.swift`, `FalconerEngine.swift`, `NoOpFalconerEngine.swift`,
-  `contract/Contract.swift` — **compiled in all configurations** (the thin
-  plugin + the seam + the contract mirror). Nothing inspector-specific.
-- Everything else is wrapped in `#if DEBUG`: `engine/RealFalconerEngine.swift`,
-  `capture/*` (PayloadMapper, FalconerNativeConfig, Redactor, Models),
-  `storage/*` (SQLiteDatabase, HttpTransactionDao, TransactionRepository via
-  `TransactionStore`, RetentionManager), `ui/*` (SwiftUI views, theme, presenter,
-  shake), `export/*` (CurlBuilder, TextExporter).
+**Compiled in all configurations** (4 files, ~260 lines) — the thin plugin, the
+seam, and the contract mirror. Nothing inspector-specific:
+
+- `FalconerPlugin.swift` — channel wiring + method dispatch; picks the engine at
+  the single `#if DEBUG` selection point in `init()`.
+- `FalconerEngine.swift` — the protocol (the iOS mirror of Kotlin's
+  `FalconerEngine` interface). Raw `[String: Any]` in, so the plugin never
+  touches capture concerns.
+- `NoOpFalconerEngine.swift` — inert; `observeCount()` yields a single `0` and
+  finishes.
+- `contract/Contract.swift` — the frozen channel contract mirror.
+
+**Debug-only** (18 files, ~1 730 lines) — every one begins with `#if DEBUG`:
+
+| Dir | Files |
+|-----|-------|
+| `engine/` | `RealFalconerEngine.swift` |
+| `capture/` | `PayloadMapper.swift`, `FalconerNativeConfig.swift`, `Redactor.swift`, `Models.swift` |
+| `storage/` | `SQLiteDatabase.swift`, `HttpTransactionDao.swift`, `TransactionStore.swift`, `RetentionManager.swift` |
+| `ui/` | `InspectorRootView.swift`, `TransactionDetailView.swift`, `InspectorPresenter.swift`, `FalconerTheme.swift`, `BodyFormatting.swift`, `ShakeDetector.swift`, `ShareSheet.swift` |
+| `export/` | `CurlBuilder.swift`, `TextExporter.swift` |
 
 ### 13.3 Release stripping (Method A on iOS)
 
@@ -330,24 +368,103 @@ backstop with byte-identical markers (`**redacted**`, the truncation line).
 configuration, where `DEBUG` is not defined, so every `#if DEBUG` file compiles
 to nothing. The plugin's engine field then resolves to `NoOpFalconerEngine`, and
 there is no compile edge to the inspector — it is physically absent. The podspec
-makes this explicit rather than riding on CocoaPods defaults:
+makes this explicit rather than riding on CocoaPods defaults, and covers
+**Profile** as well as Release (the example `Podfile` maps `'Profile' => :release`,
+so a profile build strips the inspector too):
 
 ```ruby
 'SWIFT_ACTIVE_COMPILATION_CONDITIONS[config=Debug]'   => '$(inherited) DEBUG',
+'SWIFT_ACTIVE_COMPILATION_CONDITIONS[config=Profile]' => '$(inherited)',
 'SWIFT_ACTIVE_COMPILATION_CONDITIONS[config=Release]' => '$(inherited)',
 'OTHER_LDFLAGS[config=Debug]' => '$(inherited) -lsqlite3',  # link SQLite in Debug only
 ```
+
+Because every call site into SQLite is debug-only, `-lsqlite3` is a **Debug-only
+link flag**: a release binary links nothing beyond what Flutter/Swift already
+pull in. There is no third-party pod dependency at all — `s.dependency 'Flutter'`
+is the only one.
 
 **Proof (verified, not assumed).** In a `--release` build the plugin framework
 contains **0** occurrences of `RealFalconerEngine`, `TransactionStore`,
 `SQLiteDatabase`, or the SwiftUI view types (via `nm` + `strings`); only
 `NoOpFalconerEngine` and `FalconerPlugin` remain, and `otool -L` shows **no**
 `libsqlite3` and no third-party pod. The same framework in Debug is ~20× larger
-and contains all of them. Re-run this proof whenever native deps change or before
-any release (and re-check for archive/TestFlight configs that might define
-`DEBUG` in Release).
+and contains all of them. **This proof is automated** — the `ios` CI job runs it
+on every push and PR and fails the build if any inspector symbol or `libsqlite3`
+survives (§7). Still re-check by hand whenever native deps change, and audit any
+archive/TestFlight configuration that might define `DEBUG` in a release
+configuration.
 
-### 13.4 Option B (advanced, macro-independent)
+### 13.4 Runtime model (debug engine internals)
+
+`RealFalconerEngine` owns a `TransactionStore` and an `InspectorPresenter`;
+everything else hangs off the store.
+
+**Threading / storage.** One `SQLiteDatabase` connection opened with
+`SQLITE_OPEN_FULLMUTEX`, and **all** access serialized on a single serial
+`DispatchQueue` (`dev.alifhasnain.falconer.db`) — the single-connection model the
+DAO documents. Journal mode is WAL. The DB lives at
+`Application Support/falconer.db`.
+
+**Two-phase capture.** `logRequest` inserts a row; `logResponse` / `logError`
+**merge onto it by id** using read-modify-write (`byId` → mutate → `INSERT OR
+REPLACE`), so the DAO stays a plain upsert plus queries. Data volumes are tiny,
+so RMW is cheaper than a wide partial-update statement. If a response arrives
+with no matching request row (id unknown), a `placeholder(id:)` row is
+synthesized rather than dropping the event.
+
+**Backstop enforcement order.** Redaction and truncation are re-applied in
+`TransactionStore` *before* the row is persisted, using the resolved
+`FalconerNativeConfig`. `config.enabled` (already-resolved `effectiveEnabled`
+from Dart) is checked inside each ingest, so a stray payload arriving while
+capture is off is dropped natively. Over-cap images are handled specially: the
+bytes are **discarded** and the body becomes a visible marker
+(`[Falconer: image truncated — N bytes > M]`) — the image is never persisted
+above the cap.
+
+**Live count.** `observeCount()` hands out an `AsyncStream<Int>` per subscriber;
+continuations are held in a dictionary behind an `NSLock`, so multiple
+subscribers are supported and each gets the current count immediately on
+subscribe, then a value after every write and clear. `FalconerPlugin` bridges the
+stream to the EventChannel in a `Task`, hopping to `MainActor` to call the sink,
+and cancels that task on `onCancel` / `detachFromEngine`.
+
+**SwiftUI feed.** The same store publishes `transactions` (`@Published`,
+main-actor) for the UI, so a response merging in after a row is opened updates
+the open detail live (the detail view looks the transaction up by id every
+render).
+
+**Retention.** `RetentionManager` sweeps unconditionally after `configure`, and
+throttled on the write path — at most one sweep per 60 s. `forever` never
+deletes. Windows mirror Android exactly (`oneHour` / `oneDay` / `oneWeek` /
+`forever`).
+
+**Graceful degradation.** If the Application Support directory or the DB cannot
+be opened, `dao` is `nil` and every ingest becomes a silent no-op — the host app
+never sees a throw from the inspector. All DAO calls use `try?` for the same
+reason.
+
+### 13.5 Shake-to-open (and the swizzle that bit us)
+
+iOS has no notification-to-task model, so the debug entry point is a device
+shake plus the programmatic `launchUi`. `ShakeDetector.install()` adds a
+**`UIWindow`-scoped override** of `motionEnded(_:with:)` via
+`class_replaceMethod` with an `imp_implementationWithBlock`, posts
+`.falconerShake`, then forwards to the captured original `IMP`.
+
+Why not the usual two-selector swizzle: `UIResponder`'s default
+`motionEnded(_:with:)` forwards to the next responder **using `_cmd`** — the
+selector it was invoked with. A classic swizzle invokes the original under a
+*renamed* selector, so that renamed selector gets propagated up the chain to the
+window's next responder (`UIWindowScene`), which does not implement it →
+`-[UIWindowScene falconer_motionEnded:with:]: unrecognized selector` crash.
+Calling the original IMP directly with the real selector keeps the responder
+chain intact and never leaks a private selector. `ShakeDetectorTests` pins both
+halves of this regression (a shake on a non-window responder must not crash; a
+shake on a `UIWindow` attached to the host's scene must post *and* forward
+cleanly).
+
+### 13.6 Option B (advanced, macro-independent)
 
 For teams with custom build configurations or a hard audit requirement, ship the
 inspector as a **separate Debug-only pod** and resolve the real engine at runtime
@@ -355,9 +472,57 @@ via `NSClassFromString`; the thin plugin falls back to the no-op when the Debug
 pod is not linked. This decouples stripping from the `DEBUG` macro at the cost of
 a one-line Podfile edit (`pod 'FalconerInspector', :configurations => ['Debug']`)
 — Chucker's "Method B" ergonomics. Option A is the default; both keep the Dart
-runtime gate (`enableInReleaseBuilds`) as defence in depth.
+runtime gate (release always resolves to disabled) as defence in depth.
 
-### 13.5 Versioning nuance
+### 13.7 Behaviour deltas vs Android (stated, not hidden)
+
+Feature parity is the goal, but three things differ. The channel contract is
+identical on both sides — the deltas are in what the native side *does* with it:
+
+1. **Notifications are not implemented.** `showNotification` is parsed into
+   `FalconerNativeConfig` and then **never read** — it is accepted and ignored so
+   the shared Dart config stays platform-neutral. `requestNotificationPermission`
+   resolves **`true`** without asking for anything, because there is nothing to
+   grant: the iOS entry points are shake and `launchUi`. A consuming app that
+   branches on that result therefore sees the same shape on both platforms.
+2. **List filtering is in-memory.** `HttpTransactionDao.filtered(_:)` exists and
+   is unit-tested (SQL `LIKE … COLLATE NOCASE` over url / method / host /
+   `CAST(statusCode AS TEXT)`), but `InspectorRootView` filters the published
+   `transactions` array in Swift instead — same four fields, same
+   case-insensitivity, no round trip per keystroke. The DAO query is the
+   pushdown path kept for when volumes make it worth it.
+3. **No cross-launch task/back-stack semantics.** Android's inspector is a
+   separate Activity in its own task; iOS presents a `UIWindow` one level above
+   the app's, dismissed by its Close button, `clear()`, or `detach()`. Nothing
+   persists the inspector across app launches on either platform.
+
+### 13.8 iOS test coverage (`example/ios/RunnerTests/RunnerTests.swift`)
+
+Six XCTest classes, all headless on the simulator — no device storage, no
+network:
+
+- `ContractTests` — the **drift guard**. Mirrors `test/contract/contract_test.dart`
+  and fails if any channel name, method name, payload key, config key, or body
+  kind diverges from the frozen Dart contract. Note `PayloadKeys.protocolName`
+  maps to the wire key `"protocol"` (`protocol` is a Swift keyword) — the test
+  pins that mapping explicitly.
+- `PayloadMapperTests` — `NSNull` → `nil`, `Int`/`NSNumber`/`Int64` tolerance
+  (Flutter's `StandardMessageCodec` picks the width by magnitude), and
+  missing-`id` rejection.
+- `ConfigAndRedactionTests` — config parsing, lowercased header matching,
+  and the byte-identical truncation marker.
+- `DaoTests` — real SQLite via `SQLiteDatabase(path: ":memory:")`: insert,
+  query, filter, upsert-merge-by-id, clear.
+- `FormattingAndExportTests` — match-finding, JSON pretty-print, byte
+  formatting, and that a **redacted header's mask travels into the cURL export**
+  (the mark travels; the secret never existed here).
+- `ShakeDetectorTests` — the swizzle regression from §13.5.
+
+`BodyFormatting` deliberately holds the pure logic (pretty-print, match ranges,
+formatting) with **no SwiftUI import**, so it is unit-testable — the same split
+Android needs because Compose `ui.text` is not JVM-safe.
+
+### 13.9 Versioning nuance
 
 iOS native code ships in the plugin pod, so an iOS-only change bumps the **pub
 package** version (`pubspec.yaml`, `ios/falconer.podspec`) but **not** the

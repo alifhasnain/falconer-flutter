@@ -30,7 +30,12 @@ migrate_working_dir/
 .dart_tool/
 .flutter-plugins-dependencies
 /build/
-/doc/
+# `/doc/*` rather than `/doc/` so the exception below applies — git cannot
+# re-include a file whose parent DIRECTORY is excluded.
+/doc/*
+# The wire-format spec is referenced from the contract sources on every side and
+# is useful to consumers, so it ships. The rest of /doc/ stays local notes.
+!/doc/CHANNEL_CONTRACT.md
 /coverage/
 
 # Claude Code (rules, skills, settings) — kept out of source control.

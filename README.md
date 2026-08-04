@@ -73,15 +73,19 @@ Open the inspector by calling `Falconer.launchUi()`, or:
 
 Falconer persists captured HTTP data **on the device**.
 
-- **Release builds are inert by default.** Capture requires an explicit opt-in
-  (`enabled: true` **and** `enableInReleaseBuilds: true`).
+- **Release builds cannot capture — there is no opt-in.** `resolveEnabled`
+  returns `false` for every release build, so no configuration (`enabled: true`
+  included) turns capture on in release. Nothing to enable means nothing to
+  forget to disable.
 - **Sensitive headers are redacted in Dart before they cross the channel** —
   `Authorization`, `Cookie`, `Set-Cookie`, `Proxy-Authorization`, `X-Api-Key`,
   `X-Auth-Token` by default; secrets never reach native logs or the database.
 - **Do not capture cardholder data (PAN/CVV) or other regulated PII.** In
-  payment/PCI-DSS contexts, exclude such endpoints from capture and keep
-  release capture disabled. Body-content redaction patterns are not yet
-  implemented.
+  payment/PCI-DSS contexts, exclude such endpoints from capture. Body-content
+  redaction is not yet implemented — only header *names* are redacted, so a PAN
+  inside a JSON body is stored verbatim in a debug build.
+- **Captured data never leaves the device.** Falconer has no remote/network sink
+  by design — there is no code path that transmits captured traffic anywhere.
 - **The inspector is physically absent from release builds on both platforms.**
   Android strips it via build-variant-scoped native artifacts + R8; iOS compiles
   the whole inspector behind `#if DEBUG`, so a release IPA contains no capture,
@@ -96,7 +100,7 @@ Teams with custom build configurations or a hard audit requirement can instead
 ship the inspector as a separate Debug-only pod and look it up at runtime; this
 decouples stripping from the `DEBUG` macro at the cost of a one-line Podfile
 edit. See `DOCUMENTATION.md` for details. Both paths keep the Dart runtime gate
-(`enableInReleaseBuilds`) as defence in depth.
+(`resolveEnabled` is `false` in release) as defence in depth.
 
 ## Example
 

@@ -13,7 +13,7 @@
 #
 Pod::Spec.new do |s|
   s.name             = 'falconer'
-  s.version          = '0.2.0'
+  s.version          = '0.3.0'
   s.summary          = 'A Chucker-style HTTP inspector for the Dio client.'
   s.description      = <<-DESC
 Capture, inspect, search and export Dio HTTP traffic in a native on-device UI.

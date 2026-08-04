@@ -6,16 +6,11 @@ import 'api_clients.dart' as api;
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Falconer captures only in DEBUG by default. To capture in a RELEASE build,
-  // opt in EXPLICITLY (this persists HTTP data on-device — see README):
+  // Falconer captures in DEBUG builds only — there is no release opt-in, and
+  // the native engine is absent from release binaries (see README).
   //
-  // await Falconer.configure(const FalconerConfig(
-  //   enabled: true,
-  //   enableInReleaseBuilds: true,
-  // ));
-  //
-  // Default demo config: debug capture with strong header redaction plus a
-  // custom secret header, kept for one day.
+  // Demo config: debug capture with strong header redaction plus a custom
+  // secret header, kept for one day.
   await Falconer.configure(
     FalconerConfig(
       redactHeaders: {...FalconerConfig.defaultRedactHeaders, 'X-Demo-Secret'},
