@@ -45,15 +45,23 @@ chain.
 
 Keys come from `ConfigKeys` (Dart), parsed by `FalconerNativeConfig` on both
 native sides. `enabled` is the **resolved** `effectiveEnabled` (after release
-gating, so always `false` in a release build) — the native backstop sees the live
-state and drops log calls when capture is off.
+gating, so always `false` in a release build), so the native side can see the
+live capture state.
+
+> Both platforms enforce `enabled` on every ingest as of `falconer-impl 0.2.0`
+> (iOS `guard config.enabled`; Android `if (!nativeConfig.enabled) return` in
+> `RealFalconerEngine.logRequest/logResponse/logError`). Against `falconer-impl
+> 0.1.0` Android parsed the flag but ignored it, leaving the Dart gate as the
+> only thing stopping capture there — a release build was unaffected either way,
+> since that gate is unconditional in release and the impl artifact is
+> debug-only.
 
 | Key | Type | Notes |
 |-----|------|-------|
 | `enabled` | bool | resolved `effectiveEnabled` |
 | `maxContentLength` | int | truncation cap, bytes |
 | `redactHeaders` | List<String> | header names to mask |
-| `retention` | String | `oneHour` / `oneDay` / `oneWeek` / `forever` |
+| `retention` | String | `oneHour` / `oneDay` / `oneWeek` / `oneMonth`; Dart defaults to `oneWeek`. Rolling durations, not calendar units — `oneMonth` is a fixed 30 days and is the **maximum**; there is no unbounded window. Both native sides map an **unknown** key silently onto their one-day window (including the retired `forever`, which therefore deletes *more*, not less), so adding a value means updating every mirror together; the three golden tests pin the set |
 | `showNotification` | bool | Android only; accepted and ignored on iOS |
 
 Redaction (matched headers → `**redacted**`) and truncation happen **in Dart

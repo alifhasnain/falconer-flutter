@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:falconer/falconer.dart';
+import 'package:falconer/src/falconer_runtime.dart' as runtime;
 import 'package:falconer/src/platform/falconer_platform.dart';
 import 'package:falconer/src/platform/method_channel_falconer.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
@@ -106,4 +107,39 @@ void main() {
       expect(await Falconer.transactionCount.toList(), const [0, 1, 2]);
     });
   });
+
+  group('configure never throws into the host app', () {
+    test(
+      'a failing platform channel is swallowed, Dart config still applied',
+      () async {
+        FalconerPlatform.instance = _ThrowingFalconerPlatform();
+
+        // Regression: calling configure before the binding exists used to throw
+        // "Binding has not yet been initialized" straight out of main().
+        await expectLater(
+          Falconer.configure(
+            const FalconerConfig(enabled: true, maxContentLength: 7),
+          ),
+          completes,
+        );
+
+        // The Dart side is configured regardless of the channel failure.
+        expect(runtime.activeConfig.maxContentLength, 7);
+        expect(runtime.captureEnabled, isTrue);
+      },
+    );
+  });
+}
+
+/// Stands in for a platform channel that is unreachable (no binding yet).
+class _ThrowingFalconerPlatform
+    with MockPlatformInterfaceMixin
+    implements FalconerPlatform {
+  @override
+  Future<void> configure(Map<String, dynamic> config) async =>
+      throw StateError('Binding has not yet been initialized.');
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) =>
+      throw UnimplementedError(invocation.memberName.toString());
 }

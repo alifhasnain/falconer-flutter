@@ -12,8 +12,22 @@ import Foundation
 /// Insert-on-request, merge-on-response|error uses read-modify-write (data
 /// volumes are tiny), so the DAO stays a plain upsert + queries.
 final class TransactionStore: ObservableObject {
-    /// Reverse-chronological list for the inspector. Main-actor published.
-    @Published private(set) var transactions: [HttpTransaction] = []
+    /// Reverse-chronological list for the inspector, projected down to the columns
+    /// the list renders (no bodies, no image BLOB). Main-actor published.
+    @Published private(set) var rows: [TransactionListRow] = []
+
+    /// Bumped on every publish. The detail screen re-reads its full row off this,
+    /// so a response merging in after the row was opened still updates live
+    /// without the list having to carry every payload in memory.
+    @Published private(set) var revision: Int = 0
+
+    /// True until the first DB read has been published.
+    ///
+    /// "Not answered yet" is not "answered: nothing" — keeping them apart is what
+    /// lets the inspector show a loading skeleton instead of claiming "No requests
+    /// captured yet" at a database that has simply not replied (PRODUCT.md
+    /// principle 3: never state something the data does not say).
+    @Published private(set) var isLoading = true
 
     private let queue = DispatchQueue(label: "dev.alifhasnain.falconer.db")
     private let dao: HttpTransactionDao?
@@ -133,17 +147,35 @@ final class TransactionStore: ObservableObject {
         reloadAndPublish()
     }
 
-    /// Must run on `queue`. Reloads the list + count and republishes.
+    /// Must run on `queue`. Reloads the list projection + count and republishes.
     private func reloadAndPublish() {
-        let rows = (try? dao?.all()) ?? []
-        let count = rows.count
+        let listRows = (try? dao?.listRows()) ?? []
+        let count = listRows.count
         countLock.lock()
         currentCount = count
         let continuations = Array(countContinuations.values)
         countLock.unlock()
         for continuation in continuations { continuation.yield(count) }
         DispatchQueue.main.async { [weak self] in
-            self?.transactions = rows
+            self?.rows = listRows
+            self?.revision &+= 1
+            // Also clears when the DAO failed to open: an empty list is then a real
+            // answer, not a pending one — the skeleton must not hang.
+            self?.isLoading = false
+        }
+    }
+
+    /// Reads one full transaction (headers, bodies, image) off the DB queue.
+    /// The detail screen is the only caller — the list never holds payloads.
+    func transaction(id: String) async -> HttpTransaction? {
+        await withCheckedContinuation { continuation in
+            queue.async { [weak self] in
+                guard let dao = self?.dao else {
+                    continuation.resume(returning: nil)
+                    return
+                }
+                continuation.resume(returning: try? dao.byId(id))
+            }
         }
     }
 

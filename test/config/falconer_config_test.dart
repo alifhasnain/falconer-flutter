@@ -7,7 +7,7 @@ void main() {
     test('defaults', () {
       const c = FalconerConfig();
       expect(c.maxContentLength, 250000);
-      expect(c.retention, RetentionPeriod.oneDay);
+      expect(c.retention, RetentionPeriod.oneWeek);
       expect(c.showNotification, true);
       expect(c.redactHeaders, contains('Authorization'));
     });
@@ -38,10 +38,10 @@ void main() {
       const c = FalconerConfig();
       final c2 = c.copyWith(
         maxContentLength: 10,
-        retention: RetentionPeriod.forever,
+        retention: RetentionPeriod.oneMonth,
       );
       expect(c2.maxContentLength, 10);
-      expect(c2.retention, RetentionPeriod.forever);
+      expect(c2.retention, RetentionPeriod.oneMonth);
       expect(c2.enabled, c.enabled);
       expect(c2.redactHeaders, c.redactHeaders);
     });

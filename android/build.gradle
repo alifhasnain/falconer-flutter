@@ -4,7 +4,7 @@ version = "1.0-SNAPSHOT"
 // The falconer-android artifacts (Maven Central, io.github.alifhasnain) that
 // provide the engine. One version, in lockstep — the no-op's interface must
 // match core. Bump this together with the pub package version on each release.
-ext.falconer_version = "0.1.0"
+ext.falconer_version = "0.2.0"
 
 buildscript {
     ext.kotlin_version = "2.1.0"

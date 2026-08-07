@@ -29,7 +29,7 @@ class FalconerConfig {
     this.enabled = kDebugMode,
     this.redactHeaders = defaultRedactHeaders,
     this.maxContentLength = 250000,
-    this.retention = RetentionPeriod.oneDay,
+    this.retention = RetentionPeriod.oneWeek,
     this.showNotification = true,
   });
 
@@ -45,7 +45,14 @@ class FalconerConfig {
   /// Bodies/images larger than this (bytes) are truncated.
   final int maxContentLength;
 
-  /// Retention window for stored transactions.
+  /// Retention window for stored transactions. Defaults to
+  /// [RetentionPeriod.oneWeek].
+  ///
+  /// This is the window in which captured payloads remain readable on the
+  /// device, so prefer the shortest one that is still useful for debugging.
+  /// Sweeps are time-based only — there is no row or size cap, and response
+  /// images are stored in-row, so a long window on a busy app grows the store
+  /// without bound.
   final RetentionPeriod retention;
 
   /// Whether the native ongoing notification is shown.

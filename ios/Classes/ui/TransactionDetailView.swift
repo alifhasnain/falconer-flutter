@@ -11,10 +11,13 @@ struct TransactionDetailView: View {
     @State private var tab: Tab = .overview
     @State private var bodySearch = ""
     @State private var shareItem: ShareItem?
+    /// The full row, read on demand. The store's published list is a projection
+    /// without bodies, so detail fetches its own payload by id and re-fetches
+    /// whenever the store republishes (`store.revision`).
+    @State private var tx: HttpTransaction?
+    @State private var loaded = false
 
     enum Tab: Hashable { case overview, request, response }
-
-    private var tx: HttpTransaction? { store.transactions.first { $0.id == id } }
 
     var body: some View {
         Group {
@@ -64,14 +67,23 @@ struct TransactionDetailView: View {
                 .sheet(item: $shareItem) { item in
                     ShareSheet(items: [item.text])
                 }
-            } else {
+            } else if loaded {
                 VStack {
                     Text("Transaction cleared")
                         .foregroundColor(FalconerTheme.textSecondary)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(FalconerTheme.background)
+            } else {
+                // The read has not answered yet — saying "cleared" here would be a
+                // claim the data has not made (PRODUCT.md principle 3).
+                FalconerTheme.background
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
+        }
+        .task(id: store.revision) {
+            tx = await store.transaction(id: id)
+            loaded = true
         }
     }
 

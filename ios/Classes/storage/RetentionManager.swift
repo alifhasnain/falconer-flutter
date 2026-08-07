@@ -3,7 +3,8 @@ import Foundation
 
 /// Deletes transactions older than the configured window. Runs once at startup
 /// (after `configure`) and throttled on writes, mirroring the Android windows
-/// (`oneHour` / `oneDay` / `oneWeek` / `forever`). `forever` never deletes.
+/// (`oneHour` / `oneDay` / `oneWeek` / `oneMonth`). Every window is bounded, so a
+/// sweep always runs — there is no "keep forever".
 final class RetentionManager {
     private let dao: HttpTransactionDao
     private var window: RetentionWindow = .oneDay
@@ -22,14 +23,12 @@ final class RetentionManager {
 
     /// Unconditional sweep (call after `configure`).
     func cleanupNow(now: Int64) {
-        guard let span = window.millis else { return }
         lastRunMs = now
-        try? dao.deleteOlderThan(now - span)
+        try? dao.deleteOlderThan(now - window.millis)
     }
 
     /// Throttled sweep for the write path.
     func cleanupThrottled(now: Int64) {
-        guard window.millis != nil else { return }
         if now - lastRunMs < throttleMs { return }
         cleanupNow(now: now)
     }

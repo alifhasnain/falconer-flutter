@@ -20,6 +20,12 @@ final class HttpTransactionDao {
     error
     """
 
+    /// Column list for the list-screen projection — `mapListRow(_:)` reads by
+    /// these 0-based indices, so this order and that mapper change together.
+    private static let listColumns = """
+    id, startedAt, tookMs, method, url, host, path, statusCode, responseContentLength, error
+    """
+
     init(db: SQLiteDatabase) throws {
         self.db = db
         try createSchema()
@@ -124,23 +130,31 @@ final class HttpTransactionDao {
         return try stmt.step() ? map(stmt) : nil
     }
 
-    func all() throws -> [HttpTransaction] {
+    /// Every row, projected down to what the list screen renders.
+    ///
+    /// Deliberately NOT `columns`: the wide row carries `requestBody`,
+    /// `responseBody` and the `responseImageBytes` BLOB, each capped at
+    /// `maxContentLength` (250 KB by default). This query re-runs after every
+    /// write, so selecting the wide row would mean re-reading up to half a
+    /// megabyte per transaction to draw a handful of short fields. Detail reads
+    /// (`byId`) still take the full row — that screen actually renders bodies.
+    func listRows() throws -> [TransactionListRow] {
         let stmt = try db.prepare(
-            "SELECT \(HttpTransactionDao.columns) FROM transactions "
+            "SELECT \(HttpTransactionDao.listColumns) FROM transactions "
             + "ORDER BY COALESCE(startedAt, completedAt, 0) DESC;"
         )
-        var rows: [HttpTransaction] = []
-        while try stmt.step() { rows.append(map(stmt)) }
+        var rows: [TransactionListRow] = []
+        while try stmt.step() { rows.append(mapListRow(stmt)) }
         return rows
     }
 
     /// Case-insensitive substring match over url / method / status / host.
-    func filtered(_ query: String) throws -> [HttpTransaction] {
+    func listRowsFiltered(_ query: String) throws -> [TransactionListRow] {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return try all() }
+        guard !trimmed.isEmpty else { return try listRows() }
         let like = "%\(trimmed)%"
         let stmt = try db.prepare("""
-        SELECT \(HttpTransactionDao.columns) FROM transactions
+        SELECT \(HttpTransactionDao.listColumns) FROM transactions
         WHERE url LIKE ?1 COLLATE NOCASE
            OR method LIKE ?1 COLLATE NOCASE
            OR host LIKE ?1 COLLATE NOCASE
@@ -148,8 +162,8 @@ final class HttpTransactionDao {
         ORDER BY COALESCE(startedAt, completedAt, 0) DESC;
         """)
         stmt.bind(1, like)
-        var rows: [HttpTransaction] = []
-        while try stmt.step() { rows.append(map(stmt)) }
+        var rows: [TransactionListRow] = []
+        while try stmt.step() { rows.append(mapListRow(stmt)) }
         return rows
     }
 
@@ -181,6 +195,21 @@ final class HttpTransactionDao {
             responseBodyKind: s.string(21),
             responseImageBytes: s.data(22),
             error: s.string(23)
+        )
+    }
+
+    private func mapListRow(_ s: SQLiteDatabase.Statement) -> TransactionListRow {
+        TransactionListRow(
+            id: s.string(0) ?? "",
+            startedAt: s.int64(1) ?? 0,
+            tookMs: s.int64(2),
+            method: s.string(3) ?? "",
+            url: s.string(4) ?? "",
+            host: s.string(5) ?? "",
+            path: s.string(6) ?? "",
+            statusCode: s.int(7),
+            responseContentLength: s.int64(8),
+            error: s.string(9)
         )
     }
 

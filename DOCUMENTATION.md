@@ -113,10 +113,23 @@ Key behaviours:
   toward the channel. This is defence-in-depth *on top of* the native stripping,
   and it is now a structural guarantee rather than a default someone can flip.
 - **Redaction & truncation happen in Dart first** (before crossing the channel),
-  and are enforced again natively as a backstop.
+  and are enforced again natively as a backstop on both platforms, with
+  byte-identical markers.
+- **The `enabled` backstop is enforced on both platforms** as of `falconer-impl
+  0.2.0` — iOS via `guard config.enabled`, Android via an early return in
+  `RealFalconerEngine`'s three log methods. Against engine `0.1.0` Android parsed
+  the flag and ignored it; release builds were unaffected either way, since the
+  Dart gate is unconditional there and `falconer-impl` is debug-only.
+- **`Falconer.configure` never throws.** A failing platform channel is swallowed
+  and reported via `debugPrint`, matching the log calls' fire-and-forget policy —
+  a diagnostic tool must not be able to break the host app. The Dart-side config
+  is applied before the channel call, so capture still honours it; only the native
+  backstop misses the update. (It still needs a live binding: call
+  `WidgetsFlutterBinding.ensureInitialized()` first if it runs at the top of `main`.)
 - **Contract mirroring.** The channel method names and payload keys are defined once
-  in `contract.dart` and mirrored in the Kotlin `channel/*` constants (now shipped
-  in `falconer-core`). Golden tests guard against drift.
+  in `contract.dart` and mirrored in the Kotlin `channel/*` constants (shipped in
+  `falconer-core`) and `ios/Classes/contract/Contract.swift`. Golden tests on all
+  three sides guard against drift.
 
 ---
 
@@ -141,9 +154,9 @@ only linked in debug.
 
 The plugin's `android/build.gradle` declares the engine per variant:
 ```gradle
-api                   "io.github.alifhasnain:falconer-core:0.1.0"
-debugImplementation   "io.github.alifhasnain:falconer-impl:0.1.0"
-releaseImplementation "io.github.alifhasnain:falconer-noop:0.1.0"
+api                   "io.github.alifhasnain:falconer-core:0.2.0"
+debugImplementation   "io.github.alifhasnain:falconer-impl:0.2.0"
+releaseImplementation "io.github.alifhasnain:falconer-noop:0.2.0"
 ```
 
 Package: `dev.alifhasnain.falconer`.
@@ -297,7 +310,7 @@ it.
 
 - **Plugin package:** `dev.alifhasnain.falconer`
 - **Channel name:** `falconer`; count stream: `falconer/transactionCount`
-- **Engine coordinates:** `io.github.alifhasnain:falconer-core|impl|noop:0.1.0`
+- **Engine coordinates:** `io.github.alifhasnain:falconer-core|impl|noop:0.2.0`
 - **Repos:** `alifhasnain/falconer-flutter` (plugin) · `alifhasnain/falconer-android` (engine)
 - **Toolchain:** Kotlin 2.1.0 · AGP 8.9.1 · Gradle 8.12 · SQLDelight 2.2.1 ·
   compileSdk/targetSdk 36 · minSdk 21 · jvmTarget 17 · Flutter 3.35.4
@@ -429,15 +442,18 @@ subscribe, then a value after every write and clear. `FalconerPlugin` bridges th
 stream to the EventChannel in a `Task`, hopping to `MainActor` to call the sink,
 and cancels that task on `onCancel` / `detachFromEngine`.
 
-**SwiftUI feed.** The same store publishes `transactions` (`@Published`,
-main-actor) for the UI, so a response merging in after a row is opened updates
-the open detail live (the detail view looks the transaction up by id every
-render).
+**SwiftUI feed.** The same store publishes `rows` (`@Published`, main-actor) — a
+projection carrying only what the list renders, never bodies or the image BLOB —
+plus a `revision` counter bumped on every publish. The detail view reads its full
+row by id through `store.transaction(id:)` and re-reads whenever `revision`
+changes, so a response merging in after a row is opened still updates the open
+detail live without the list holding every payload in memory.
 
 **Retention.** `RetentionManager` sweeps unconditionally after `configure`, and
-throttled on the write path — at most one sweep per 60 s. `forever` never
-deletes. Windows mirror Android exactly (`oneHour` / `oneDay` / `oneWeek` /
-`forever`).
+throttled on the write path — at most one sweep per 60 s. Every window is
+bounded, so a sweep always runs. Windows mirror Android exactly (`oneHour` /
+`oneDay` / `oneWeek` / `oneMonth`) and are rolling durations, not calendar
+units — `oneMonth` is a fixed 30 days and is the maximum.
 
 **Graceful degradation.** If the Application Support directory or the DB cannot
 be opened, `dao` is `nil` and every ingest becomes a silent no-op — the host app

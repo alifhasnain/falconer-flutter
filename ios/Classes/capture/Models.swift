@@ -2,23 +2,37 @@
 import Foundation
 
 /// Retention window for stored transactions. Mirrors Dart `RetentionPeriod`
-/// (`retention_period.dart`) and its wire keys.
-enum RetentionWindow: String {
+/// (`retention_period.dart`) and its wire keys — the raw values ARE those keys.
+///
+/// Every window is bounded; `oneMonth` is the ceiling. There is deliberately no
+/// "keep forever": captured traffic is unredacted-by-default payload sitting in
+/// an on-device SQLite file, so an unbounded window would let a debug build
+/// accumulate request and response bodies indefinitely.
+///
+/// Rolling durations measured back from now, not calendar units: `oneMonth` is a
+/// fixed 30 days. Adding a case here without adding it to Dart and Kotlin means
+/// the other sides fall back to one day silently (`from(key:)` below does the
+/// same in reverse).
+/// `CaseIterable` so the Swift golden test can pin the whole wire-key set.
+enum RetentionWindow: String, CaseIterable {
     case oneHour
     case oneDay
     case oneWeek
-    case forever
+    case oneMonth
 
-    /// Retention duration in milliseconds, or `nil` for `forever`.
-    var millis: Int64? {
+    /// Retention duration in milliseconds.
+    var millis: Int64 {
         switch self {
         case .oneHour: return 60 * 60 * 1000
         case .oneDay: return 24 * 60 * 60 * 1000
         case .oneWeek: return 7 * 24 * 60 * 60 * 1000
-        case .forever: return nil
+        case .oneMonth: return 30 * 24 * 60 * 60 * 1000
         }
     }
 
+    /// Unknown keys fall back to one day. The retired `"forever"` key lands here
+    /// too — an older host app degrades to a one-day window, which deletes more,
+    /// not less.
     static func from(key: String?) -> RetentionWindow {
         guard let key = key, let value = RetentionWindow(rawValue: key) else {
             return .oneDay
@@ -100,6 +114,34 @@ struct HttpTransaction: Identifiable, Equatable {
 
     /// True once a response or error has merged onto the request.
     var isComplete: Bool { completedAt != nil }
+
+    /// True when the transaction ended in a transport error (no response).
+    var isFailure: Bool { error != nil }
+}
+
+/// The narrow projection behind the inspector's list screen.
+///
+/// Everything the list renders, and nothing else — no headers, no request or
+/// response body, no image BLOB. `HttpTransaction` stays the full row and is read
+/// one at a time by the detail screen, which is the only place that actually
+/// shows a payload.
+///
+/// The list query re-runs on every write, so keeping bodies out of it is what
+/// stops a busy session from re-reading hundreds of kilobytes per transaction to
+/// draw seven short fields. Mirrors Android's `TransactionListRow`.
+struct TransactionListRow: Identifiable, Equatable {
+    let id: String
+    var startedAt: Int64
+    var tookMs: Int64?
+    var method: String
+    /// Kept in the projection: the list falls back to the full URL when `path` is
+    /// empty, and the in-memory filter matches on it.
+    var url: String
+    var host: String
+    var path: String
+    var statusCode: Int?
+    var responseContentLength: Int64?
+    var error: String?
 
     /// True when the transaction ended in a transport error (no response).
     var isFailure: Bool { error != nil }

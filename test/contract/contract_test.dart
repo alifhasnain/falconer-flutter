@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:falconer/src/capture/transaction_dto.dart';
+import 'package:falconer/src/config/retention_period.dart';
 import 'package:falconer/src/platform/contract.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -175,6 +176,31 @@ void main() {
       expect(dto['tookMs'], 1000);
       expect(dto['error'], isA<String>());
       expect(dto['error'], isNotEmpty);
+    });
+
+    test('retention wire keys are exactly the mirrored set', () {
+      // Both native sides map an UNKNOWN retention key silently onto their
+      // one-day window (Kotlin `RetentionPeriod.fromKey`, Swift
+      // `RetentionWindow.from(key:)`). Adding a value here without adding it to
+      // both mirrors would therefore sweep at the wrong window with no error, so
+      // pin the set: this test must fail until every mirror is updated too.
+      expect(RetentionPeriod.values.map((p) => p.key).toSet(), {
+        'oneHour',
+        'oneDay',
+        'oneWeek',
+        'oneMonth',
+      });
+    });
+
+    test('no unbounded retention window exists', () {
+      // Retention is the only thing that bounds on-device storage of captured
+      // payload. A "forever" key must not come back: an unknown key degrades to
+      // one day on both native sides, which deletes more, not less.
+      expect(
+        RetentionPeriod.values.map((p) => p.key),
+        isNot(contains('forever')),
+      );
+      expect(RetentionPeriod.values.last, RetentionPeriod.oneMonth);
     });
   });
 }

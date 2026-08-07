@@ -9,14 +9,23 @@ import SwiftUI
 /// target is iOS 15; the destination observes the store so a response merging
 /// in after the row is opened updates the open detail live.
 struct InspectorRootView: View {
+    /// How long the screen may stay loading before the skeleton appears. Under
+    /// this, the data wins the race and no placeholder is ever drawn — a
+    /// one-frame flash of shimmer is noise, not polish.
+    private static let skeletonGrace: TimeInterval = 0.12
+    /// Once shown, the skeleton holds this long so it reads as a state, not a blink.
+    private static let skeletonMinHold: TimeInterval = 0.32
+
     @ObservedObject var store: TransactionStore
     let onClose: () -> Void
     @State private var search = ""
+    @State private var showSkeleton = false
+    @State private var skeletonShownAt = Date()
 
-    private var filtered: [HttpTransaction] {
+    private var filtered: [TransactionListRow] {
         let query = search.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard !query.isEmpty else { return store.transactions }
-        return store.transactions.filter { tx in
+        guard !query.isEmpty else { return store.rows }
+        return store.rows.filter { tx in
             tx.url.lowercased().contains(query)
                 || tx.method.lowercased().contains(query)
                 || tx.host.lowercased().contains(query)
@@ -27,7 +36,9 @@ struct InspectorRootView: View {
     var body: some View {
         NavigationView {
             Group {
-                if store.transactions.isEmpty {
+                if showSkeleton {
+                    TransactionListSkeleton()
+                } else if store.rows.isEmpty {
                     EmptyStateView()
                 } else {
                     List {
@@ -43,6 +54,8 @@ struct InspectorRootView: View {
                 }
             }
             .background(FalconerTheme.background)
+            .animation(.easeInOut(duration: 0.18), value: showSkeleton)
+            .task(id: store.isLoading) { await syncSkeleton() }
             .navigationTitle("Falconer")
             .navigationBarTitleDisplayMode(.inline)
             .searchable(
@@ -60,17 +73,40 @@ struct InspectorRootView: View {
                     } label: {
                         Image(systemName: "trash")
                     }
-                    .disabled(store.transactions.isEmpty)
+                    .disabled(store.rows.isEmpty)
                 }
             }
         }
         .navigationViewStyle(.stack)
     }
+
+    /// Debounces `store.isLoading` into skeleton visibility.
+    ///
+    /// `.task(id:)` cancels this on every change of the flag, which is what
+    /// implements the grace window: if the load finishes inside it, the pending
+    /// "show" is cancelled before it fires and no placeholder is ever drawn.
+    private func syncSkeleton() async {
+        if store.isLoading {
+            try? await Task.sleep(nanoseconds: UInt64(Self.skeletonGrace * 1_000_000_000))
+            guard !Task.isCancelled else { return }
+            skeletonShownAt = Date()
+            showSkeleton = true
+        } else if showSkeleton {
+            let elapsed = Date().timeIntervalSince(skeletonShownAt)
+            if elapsed < Self.skeletonMinHold {
+                try? await Task.sleep(
+                    nanoseconds: UInt64((Self.skeletonMinHold - elapsed) * 1_000_000_000)
+                )
+            }
+            guard !Task.isCancelled else { return }
+            showSkeleton = false
+        }
+    }
 }
 
 /// A single transaction row: method · path, host, and status/timing.
 struct TransactionRow: View {
-    let tx: HttpTransaction
+    let tx: TransactionListRow
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {

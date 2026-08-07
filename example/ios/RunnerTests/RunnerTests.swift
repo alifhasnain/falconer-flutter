@@ -135,6 +135,26 @@ final class ConfigAndRedactionTests: XCTestCase {
         XCTAssertFalse(c.showNotification)
     }
 
+    func testRetentionWireKeysMatchTheDartEnum() {
+        // `from(key:)` falls back to .oneDay on an unknown key, so a key Dart
+        // sends but this enum lacks would sweep at the wrong window with no
+        // error. Pin the whole set (mirrors test/contract/contract_test.dart).
+        XCTAssertEqual(
+            Set(["oneHour", "oneDay", "oneWeek", "oneMonth"]),
+            Set(RetentionWindow.allCases.map { $0.rawValue })
+        )
+        XCTAssertEqual(RetentionWindow.from(key: "oneMonth"), .oneMonth)
+        XCTAssertEqual(RetentionWindow.oneMonth.millis, 30 * 24 * 60 * 60 * 1000)
+        XCTAssertEqual(RetentionWindow.from(key: "bogus"), .oneDay)
+        // The retired "forever" key degrades to one day — deletes more, not less.
+        XCTAssertEqual(RetentionWindow.from(key: "forever"), .oneDay)
+        // One month is the ceiling: no window may retain longer.
+        XCTAssertEqual(
+            RetentionWindow.allCases.map { $0.millis }.max(),
+            RetentionWindow.oneMonth.millis
+        )
+    }
+
     func testRedactionIsCaseInsensitive() {
         let out = Redactor.redact(
             headers: ["Authorization": "secret", "Accept": "json"],
@@ -184,9 +204,16 @@ final class DaoTests: XCTestCase {
         XCTAssertEqual(fetched?.method, "GET")
         XCTAssertEqual(fetched?.requestHeaders["accept"], "application/json")
 
-        XCTAssertEqual(try dao.filtered("POST").count, 1)
-        XCTAssertEqual(try dao.filtered("api.example.com").count, 2)
-        XCTAssertEqual(try dao.all().count, 2)
+        XCTAssertEqual(try dao.listRowsFiltered("POST").count, 1)
+        XCTAssertEqual(try dao.listRowsFiltered("api.example.com").count, 2)
+        XCTAssertEqual(try dao.listRows().count, 2)
+
+        // The list projection carries the columns the list renders and stops
+        // there — bodies and the image BLOB are absent by construction.
+        let row = try XCTUnwrap(try dao.listRows().first { $0.id == "a" })
+        XCTAssertEqual(row.method, "GET")
+        XCTAssertEqual(row.path, "/users")
+        XCTAssertEqual(row.host, "api.example.com")
 
         try dao.clear()
         XCTAssertEqual(try dao.count(), 0)

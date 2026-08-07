@@ -15,8 +15,12 @@ struct FalconerNativeConfig {
     var retention: RetentionWindow
     var showNotification: Bool
 
-    /// Matches Dart `FalconerConfig`'s defaults (debug capture, 250 000-byte cap,
-    /// one-day retention, the strong default redaction set).
+    /// The pre-`configure` fallback only — every field is replaced the moment a
+    /// `configure` map arrives, so this is NOT the effective default a consumer
+    /// sees (that is Dart's `FalconerConfig`, which defaults retention to
+    /// `oneWeek`). Kept deliberately conservative: a short window and the strong
+    /// redaction set, so anything captured before `configure` lands is masked and
+    /// swept early rather than kept.
     static let defaults = FalconerNativeConfig(
         enabled: true,
         maxContentLength: 250_000,

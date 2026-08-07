@@ -71,7 +71,7 @@ jobs:
         run: |
           BIN=build/ios/iphoneos/Runner.app/Frameworks/falconer.framework/falconer
           fail=0
-          for s in RealFalconerEngine SQLiteDatabase TransactionStore InspectorRootView TransactionDetailView; do
+          for s in RealFalconerEngine SQLiteDatabase TransactionStore InspectorRootView TransactionDetailView ShimmerContainer TransactionListSkeleton; do
             if nm "$BIN" 2>/dev/null | grep -q "$s" || strings -a "$BIN" | grep -q "$s"; then
               echo "FAIL: '$s' present in release binary"; fail=1
             fi
