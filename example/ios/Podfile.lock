@@ -1,5 +1,5 @@
 PODS:
-  - falconer (0.2.0):
+  - falconer (0.3.0):
     - Flutter
   - Flutter (1.0.0)
   - integration_test (0.0.1):
@@ -19,7 +19,7 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/integration_test/ios"
 
 SPEC CHECKSUMS:
-  falconer: 7e55c636503ecadaecddc8548fff58d9fd777ca1
+  falconer: 75db153c51f4fb28041ce3ff935785db45c33268
   Flutter: cabc95a1d2626b1b06e7179b784ebcf0c0cde467
   integration_test: 4a889634ef21a45d28d50d622cf412dc6d9f586e
 
