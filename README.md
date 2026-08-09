@@ -92,15 +92,34 @@ Falconer persists captured HTTP data **on the device**.
   storage or UI code (verified by symbol inspection). The on-device database
   surface does not exist in release.
 
-### iOS: advanced stripping (Option B)
+### iOS: verifying the strip
 
-The default iOS mechanism (`#if DEBUG`) relies on the `DEBUG` compilation
-condition being unset in Release, which is true for standard Flutter builds.
-Teams with custom build configurations or a hard audit requirement can instead
-ship the inspector as a separate Debug-only pod and look it up at runtime; this
-decouples stripping from the `DEBUG` macro at the cost of a one-line Podfile
-edit. See `DOCUMENTATION.md` for details. Both paths keep the Dart runtime gate
-(`resolveEnabled` is `false` in release) as defence in depth.
+The iOS strip keys off the `DEBUG` compilation condition, which the plugin's
+podspec sets for the `Debug` configuration only — true for standard Flutter
+builds. If your app adds build configurations beyond `Debug` / `Profile` /
+`Release`, confirm `DEBUG` is unset in every non-development one, then check the
+built binary yourself:
+
+```sh
+flutter build ipa
+APP=build/ios/archive/Runner.xcarchive/Products/Applications/Runner.app
+BIN="$APP/Frameworks/falconer.framework/falconer"
+
+nm -gU "$BIN" | grep RealFalconerEngine   # no output = inspector absent
+otool -L "$BIN" | grep sqlite3            # no output = storage not linked
+```
+
+Both commands print nothing on a correctly stripped release build. If either
+prints a match, treat the build as capture-capable and do not ship it.
+
+Check the **archive**, not `build/ios/iphoneos/Runner.app` — a debug run on a
+device writes to that same path, so it may hold a debug binary that legitimately
+contains the inspector. Reading it as a release artifact turns a correct build
+into a false alarm. (`Frameworks/App.framework/flutter_assets/kernel_blob.bin`
+exists only in a debug build, if you need to tell two artifacts apart.)
+
+The Dart runtime gate (`resolveEnabled` is `false` in release) holds either way,
+as defence in depth.
 
 ## Example
 
