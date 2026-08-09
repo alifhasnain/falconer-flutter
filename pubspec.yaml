@@ -1,6 +1,6 @@
 name: falconer
-description: "A Chucker-style HTTP inspector for the Dio client: capture, inspect, search and export requests in a native UI. Android-only in v1."
-version: 0.1.0
+description: "A Chucker-style HTTP inspector for the Dio client: capture, inspect, search and export requests in a native UI. Supports Android and iOS."
+version: 0.3.0
 homepage: https://github.com/alifhasnain/falconer-flutter
 repository: https://github.com/alifhasnain/falconer-flutter
 
@@ -38,6 +38,8 @@ flutter:
     platforms:
       android:
         package: dev.alifhasnain.falconer
+        pluginClass: FalconerPlugin
+      ios:
         pluginClass: FalconerPlugin
 
   # To add assets to your plugin package, add an assets section, like this:

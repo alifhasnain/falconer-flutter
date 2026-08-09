@@ -6,41 +6,30 @@ void main() {
   group('FalconerConfig', () {
     test('defaults', () {
       const c = FalconerConfig();
-      expect(c.enableInReleaseBuilds, false);
       expect(c.maxContentLength, 250000);
-      expect(c.retention, RetentionPeriod.oneDay);
+      expect(c.retention, RetentionPeriod.oneWeek);
       expect(c.showNotification, true);
       expect(c.redactHeaders, contains('Authorization'));
     });
 
-    test('resolveEnabled gates release behind both flags', () {
-      // Debug branch: enableInReleaseBuilds is ignored.
+    test('resolveEnabled honours enabled in debug', () {
       expect(const FalconerConfig(enabled: true).resolveEnabled(false), isTrue);
       expect(
         const FalconerConfig(enabled: false).resolveEnabled(false),
         isFalse,
       );
+    });
 
-      // Release branch: requires enabled AND enableInReleaseBuilds.
+    test('resolveEnabled is always false in release', () {
+      // No configuration can enable capture in a release build — `enabled: true`
+      // included.
+      expect(const FalconerConfig(enabled: true).resolveEnabled(true), isFalse);
       expect(
-        const FalconerConfig(
-          enabled: true,
-          enableInReleaseBuilds: false,
-        ).resolveEnabled(true),
+        const FalconerConfig(enabled: false).resolveEnabled(true),
         isFalse,
       );
       expect(
-        const FalconerConfig(
-          enabled: true,
-          enableInReleaseBuilds: true,
-        ).resolveEnabled(true),
-        isTrue,
-      );
-      expect(
-        const FalconerConfig(
-          enabled: false,
-          enableInReleaseBuilds: true,
-        ).resolveEnabled(true),
+        const FalconerConfig().copyWith(enabled: true).resolveEnabled(true),
         isFalse,
       );
     });
@@ -49,11 +38,11 @@ void main() {
       const c = FalconerConfig();
       final c2 = c.copyWith(
         maxContentLength: 10,
-        retention: RetentionPeriod.forever,
+        retention: RetentionPeriod.oneMonth,
       );
       expect(c2.maxContentLength, 10);
-      expect(c2.retention, RetentionPeriod.forever);
-      expect(c2.enableInReleaseBuilds, c.enableInReleaseBuilds);
+      expect(c2.retention, RetentionPeriod.oneMonth);
+      expect(c2.enabled, c.enabled);
       expect(c2.redactHeaders, c.redactHeaders);
     });
 
@@ -75,7 +64,6 @@ void main() {
 
   group('runtime', () {
     setUp(() {
-      runtime.releaseCaptureWarned = false;
       runtime.applyConfig(const FalconerConfig());
     });
 
@@ -84,22 +72,6 @@ void main() {
       expect(runtime.captureEnabled, isFalse);
       runtime.applyConfig(const FalconerConfig(enabled: true));
       expect(runtime.captureEnabled, isTrue);
-    });
-
-    test('maybeWarnReleaseCapture warns once', () {
-      const c = FalconerConfig(enabled: true, enableInReleaseBuilds: true);
-      runtime.maybeWarnReleaseCapture(c, isRelease: true);
-      expect(runtime.releaseCaptureWarned, isTrue);
-      runtime.maybeWarnReleaseCapture(c, isRelease: true); // no-op, no throw
-      expect(runtime.releaseCaptureWarned, isTrue);
-    });
-
-    test('no release warning in debug', () {
-      runtime.maybeWarnReleaseCapture(
-        const FalconerConfig(enabled: true),
-        isRelease: false,
-      );
-      expect(runtime.releaseCaptureWarned, isFalse);
     });
   });
 }

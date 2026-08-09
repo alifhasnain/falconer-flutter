@@ -9,33 +9,35 @@ import 'retention_period.dart';
 ///
 /// Falconer persists captured HTTP data **on-device**. To protect secrets:
 ///
-/// - Capture is **off in release builds by default**. It activates only when
-///   both [enabled] and [enableInReleaseBuilds] are `true`.
+/// - Capture is **impossible in release builds**. [resolveEnabled] returns
+///   `false` whenever `kReleaseMode` is set, so no configuration — including
+///   `enabled: true` — can turn capture on in a release build.
 /// - Headers named in [redactHeaders] are masked **in Dart, before the payload
 ///   crosses the channel** — secrets never reach native logs or the database.
 /// - Bodies/images larger than [maxContentLength] are truncated (the original
 ///   size is still reported).
 ///
 /// **Do not capture cardholder data (PAN/CVV) or other regulated PII.** Exclude
-/// such endpoints from capture and keep release capture disabled. Body-content
-/// redaction patterns are future work (see `doc/PLAN.md`).
+/// such endpoints from capture. Only header *names* are redacted — body-content
+/// redaction is not implemented, so a PAN inside a JSON body would be stored
+/// verbatim in a debug build.
+///
+/// Falconer has no remote/network sink: captured data never leaves the device.
 @immutable
 class FalconerConfig {
   const FalconerConfig({
     this.enabled = kDebugMode,
-    this.enableInReleaseBuilds = false,
     this.redactHeaders = defaultRedactHeaders,
     this.maxContentLength = 250000,
-    this.retention = RetentionPeriod.oneDay,
+    this.retention = RetentionPeriod.oneWeek,
     this.showNotification = true,
   });
 
-  /// Master switch. Defaults to `kDebugMode` (on in debug, off in release).
+  /// Master switch, honoured in debug builds only. Defaults to `kDebugMode`.
+  ///
+  /// Setting this `true` does **not** enable capture in a release build — see
+  /// [resolveEnabled].
   final bool enabled;
-
-  /// Guard for release builds. Capture in release requires this **and**
-  /// [enabled] to be `true`.
-  final bool enableInReleaseBuilds;
 
   /// Header names masked before capture (case-insensitive).
   final Set<String> redactHeaders;
@@ -43,7 +45,14 @@ class FalconerConfig {
   /// Bodies/images larger than this (bytes) are truncated.
   final int maxContentLength;
 
-  /// Retention window for stored transactions.
+  /// Retention window for stored transactions. Defaults to
+  /// [RetentionPeriod.oneWeek].
+  ///
+  /// This is the window in which captured payloads remain readable on the
+  /// device, so prefer the shortest one that is still useful for debugging.
+  /// Sweeps are time-based only — there is no row or size cap, and response
+  /// images are stored in-row, so a long window on a busy app grows the store
+  /// without bound.
   final RetentionPeriod retention;
 
   /// Whether the native ongoing notification is shown.
@@ -66,13 +75,15 @@ class FalconerConfig {
   bool get effectiveEnabled => resolveEnabled(kReleaseMode);
 
   /// Pure resolution of [effectiveEnabled]; [isReleaseMode] injected for tests.
+  ///
+  /// Release builds always resolve to `false`: capture is a debug-build
+  /// capability, and the native engine is absent from release binaries anyway
+  /// (Method A).
   @visibleForTesting
-  bool resolveEnabled(bool isReleaseMode) =>
-      enabled && (isReleaseMode ? enableInReleaseBuilds : true);
+  bool resolveEnabled(bool isReleaseMode) => enabled && !isReleaseMode;
 
   FalconerConfig copyWith({
     bool? enabled,
-    bool? enableInReleaseBuilds,
     Set<String>? redactHeaders,
     int? maxContentLength,
     RetentionPeriod? retention,
@@ -80,8 +91,6 @@ class FalconerConfig {
   }) {
     return FalconerConfig(
       enabled: enabled ?? this.enabled,
-      enableInReleaseBuilds:
-          enableInReleaseBuilds ?? this.enableInReleaseBuilds,
       redactHeaders: redactHeaders ?? this.redactHeaders,
       maxContentLength: maxContentLength ?? this.maxContentLength,
       retention: retention ?? this.retention,

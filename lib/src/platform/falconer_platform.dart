@@ -4,9 +4,9 @@ import 'method_channel_falconer.dart';
 
 /// The platform interface every Falconer backend implements.
 ///
-/// This is the single seam an iOS implementation would target. Signatures use
-/// only `Map`/primitive types — **no Android (or platform) types leak here** —
-/// so the contract stays platform-agnostic. (D1-B in `doc/PLAN.md`.)
+/// This is the single seam each native backend targets. Signatures use only
+/// `Map`/primitive types — **no platform types leak here** — so the same
+/// contract drives the Android and iOS backends unchanged.
 abstract class FalconerPlatform extends PlatformInterface {
   /// Constructs a FalconerPlatform.
   FalconerPlatform() : super(token: _token);
