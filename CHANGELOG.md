@@ -4,6 +4,11 @@ Makes debug-only capture a **structural guarantee** instead of a default that
 could be flipped, and puts a hard ceiling on how long captured payload can sit on
 the device.
 
+**First release published to pub.dev.** `0.1.0` and `0.2.0` were development
+releases consumed as git dependencies; neither was published to pub.dev, and
+`0.2.0` was never tagged. Install with `flutter pub add falconer` from this
+version on.
+
 ### Removed — BREAKING
 
 * **`RetentionPeriod.forever` is gone; `oneMonth` is now the maximum window.**
@@ -19,6 +24,25 @@ the device.
   pinned to an older plugin against a newer engine deletes more, never less.
 
 ### Changed
+
+* **Default retention is now `oneWeek`** (was `oneDay`) — a week of history is
+  more useful for chasing intermittent failures, and capture is debug-only.
+  Retention is the window in which captured payloads stay readable on the
+  device, so pass a shorter `retention:` if your traffic is sensitive. Note
+  sweeps are time-based only: there is no row or size cap, and response images
+  are stored in-row, so a longer window grows the store without bound.
+
+  The native pre-`configure` fallbacks stay at one day; they apply only before
+  the first `configure` arrives and are replaced by it.
+
+* **The declared SDK constraints are now `sdk: ^3.9.0` / `flutter: '>=3.35.0'`**
+  (were `^3.9.2` / `>=3.3.0`). The old Flutter bound was never reachable — the
+  Dart bound already excluded every Flutter predating Dart 3.9, so `>=3.3.0`
+  advertised support that could not resolve. The Dart bound is relaxed from
+  `^3.9.2` to `^3.9.0` because Flutter 3.35.0–3.35.2 bundle Dart 3.9.0 and
+  3.35.3+ bundle 3.9.2; leaving it at `^3.9.2` would have kept 3.35.0–3.35.2
+  excluded regardless of the Flutter line. Widening only — no version that
+  previously resolved is affected.
 
 * **The list screen and the ongoing notification now read a narrow column
   projection**, not the full row. Those queries re-run on every write, and the
@@ -87,18 +111,6 @@ the device.
   `configure` still needs a live binding to reach the channel: call
   `WidgetsFlutterBinding.ensureInitialized()` before it if it runs at the top of
   `main`. The warning now says exactly that when the call fails.
-
-### Changed
-
-* **Default retention is now `oneWeek`** (was `oneDay`) — a week of history is
-  more useful for chasing intermittent failures, and capture is debug-only.
-  Retention is the window in which captured payloads stay readable on the
-  device, so pass a shorter `retention:` if your traffic is sensitive. Note
-  sweeps are time-based only: there is no row or size cap, and response images
-  are stored in-row, so a longer window grows the store without bound.
-
-  The native pre-`configure` fallbacks stay at one day; they apply only before
-  the first `configure` arrives and are replaced by it.
 
 ## 0.2.0
 

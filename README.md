@@ -11,7 +11,7 @@ JSON pretty-printing, image preview and cURL/text export.
 
 ## Status
 
-**v0.2.0 — development release.** Feature-complete on **Android and iOS**:
+**v0.3.0 — development release.** Feature-complete on **Android and iOS**:
 capture, storage, the native inspection UI, search and export all work on both.
 The API is pre-1.0 and may change.
 
@@ -42,7 +42,7 @@ dependencies:
   falconer:
     git:
       url: https://github.com/alifhasnain/falconer-flutter.git
-      ref: 0.2.0   # or `main` to track the latest
+      ref: 0.3.0   # or `main` to track the latest
 ```
 
 On iOS this is a one-line install — the native inspector ships inside the plugin
@@ -51,19 +51,58 @@ Podfile edit is required for the default path.
 
 ## Usage
 
+### 1. Configure once, at startup
+
 ```dart
-import 'package:dio/dio.dart';
 import 'package:falconer/falconer.dart';
+import 'package:flutter/material.dart';
 
-void main() {
-  // Configure once at startup. Disabled in release builds by default.
-  Falconer.configure(const FalconerConfig());
+Future<void> main() async {
+  // `configure` reaches the native side over a platform channel, so the binding
+  // must exist before it runs.
+  WidgetsFlutterBinding.ensureInitialized();
 
-  final dio = Dio()..interceptors.add(FalconerInterceptor());
+  // Capture is debug-only — release builds cannot capture at all, and there is
+  // no opt-in.
+  await Falconer.configure(const FalconerConfig());
+
+  runApp(const MyApp());
 }
 ```
 
-Open the inspector by calling `Falconer.launchUi()`, or:
+`Falconer.configure` needs a live binding to reach the platform channel. Call
+`WidgetsFlutterBinding.ensureInitialized()` first whenever it runs at the top of
+`main` — otherwise the call fails with `Binding has not yet been initialized`.
+It won't throw into your app (a channel failure is swallowed and reported via
+`debugPrint`), but the native side then keeps its own defaults, so your
+`redactHeaders` and `retention` settings are silently ignored on the native
+side. `configure` returns a `Future` — `await` it so capture is fully
+configured before the first request goes out.
+
+### 2. Add the interceptor to your Dio clients
+
+This part has nothing to do with `main` — put it wherever your clients already
+live (a service locator, a provider, a plain top-level file):
+
+```dart
+// lib/api_clients.dart
+import 'package:dio/dio.dart';
+import 'package:falconer/falconer.dart';
+
+final Dio api = Dio(BaseOptions(baseUrl: 'https://api.example.com'))
+  ..interceptors.add(FalconerInterceptor());
+
+// Multiple clients are fine — every interceptor feeds the same list.
+final Dio auth = Dio(BaseOptions(baseUrl: 'https://auth.example.com'))
+  ..interceptors.add(FalconerInterceptor());
+```
+
+Add `FalconerInterceptor()` to each client you want captured. They share one
+sink, so traffic from all of them lands in a single inspector list.
+
+### 3. Open the inspector
+
+Call `Falconer.launchUi()` from anywhere, or:
 
 - **Android** — tap the Falconer notification.
 - **iOS** — **shake the device** (debug builds), since iOS has no
