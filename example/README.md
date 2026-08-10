@@ -5,9 +5,11 @@ redaction, and the on-device inspection UI.
 
 ## What it shows
 
-- **Two Dio clients, one list.** `dioA` (jsonplaceholder) and `dioB` (httpbin)
-  each add their own `FalconerInterceptor`; their traffic appears together in a
-  single Falconer list and notification (see `lib/api_clients.dart`).
+- **Two Dio clients, one list.** `dioA` (jsonplaceholder) and `dioB`
+  (postman-echo) each add their own `FalconerInterceptor`; their traffic appears
+  together in a single Falconer list and notification (see
+  `lib/api_clients.dart`). The image request targets picsum.photos with an
+  absolute URL, since postman-echo serves no images.
 - **Configuration + redaction.** `main()` calls `Falconer.configure(...)` with a
   custom redact header (`X-Demo-Secret`) on top of the strong defaults. Requests
   send `Authorization` and `X-Demo-Secret`; both show as `**redacted**` in the

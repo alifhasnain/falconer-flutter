@@ -9,7 +9,7 @@ final Dio dioA = Dio(
   BaseOptions(baseUrl: 'https://jsonplaceholder.typicode.com'),
 )..interceptors.add(FalconerInterceptor());
 
-final Dio dioB = Dio(BaseOptions(baseUrl: 'https://httpbin.org'))
+final Dio dioB = Dio(BaseOptions(baseUrl: 'https://postman-echo.com'))
   ..interceptors.add(FalconerInterceptor());
 
 /// Headers that exercise redaction: `Authorization` (default redact set) and a
@@ -32,8 +32,12 @@ Future<void> formPost() => dioB.post<dynamic>(
 );
 
 /// Image GET — bytes path (client B).
+///
+/// Absolute URL, so it ignores client B's `baseUrl` — postman-echo serves no
+/// images. Returns `image/jpeg`, which is what puts this on the image path and
+/// gives the inspector something to preview.
 Future<void> imageGet() => dioB.get<List<int>>(
-  '/image/png',
+  'https://picsum.photos/300/200',
   options: Options(responseType: ResponseType.bytes),
 );
 
