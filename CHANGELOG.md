@@ -1,3 +1,25 @@
+## 0.3.1
+
+Documentation only — no code, API or behaviour changes.
+
+* **Install instructions now point at pub.dev.** `0.3.0` was published with a
+  README written before the package existed on pub.dev: it said "Not yet on
+  pub.dev" and told readers to add a git dependency pinned to a tag. The install
+  path is now `flutter pub add falconer`.
+
+  The command deliberately does **not** include `dio`. Every Falconer user
+  already depends on Dio, and `pub add` on an existing dependency silently
+  rewrites its constraint to the latest release rather than leaving it alone —
+  so `pub add dio falconer` would quietly bump a pinned `dio` constraint.
+  `dio` still belongs in `dependencies`, since your own code imports it.
+
+  pub.dev renders the README from the published archive, per version, so
+  correcting it required a release rather than a repo push.
+
+* Clarified that `falconer` belongs in `dependencies`, not `dev_dependencies` —
+  app code references `FalconerInterceptor` in every build, while capture itself
+  stays debug-only.
+
 ## 0.3.0
 
 Makes debug-only capture a **structural guarantee** instead of a default that

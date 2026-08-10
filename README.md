@@ -41,16 +41,28 @@ The API is pre-1.0 and may change.
 
 ## Install
 
-Not yet on pub.dev — add it as a git dependency:
+```sh
+flutter pub add falconer
+```
+
+Falconer is a Dio interceptor, so your app already declares `dio` — leave that
+entry as it is:
 
 ```yaml
 dependencies:
-  dio: ^5.7.0
-  falconer:
-    git:
-      url: https://github.com/alifhasnain/falconer-flutter.git
-      ref: 0.3.0   # or `main` to track the latest
+  dio: ^5.7.0        # already yours; Falconer does not change it
+  falconer: ^0.3.1
 ```
+
+Keep `dio` declared even though Falconer depends on it too: your own code
+imports `package:dio/dio.dart` to build the client, and `depend_on_referenced_packages`
+(active under the default `flutter_lints`) requires a package you import to be a
+direct dependency rather than a transitive one.
+
+`falconer` belongs in `dependencies`, not `dev_dependencies` — your app code
+references `FalconerInterceptor` in every build. Capture is still debug-only:
+release builds cannot capture, and the native inspector is absent from the
+release binary on both platforms (see [Security & data privacy](#security--data-privacy)).
 
 On iOS this is a one-line install — the native inspector ships inside the plugin
 pod and `flutter build ipa --release` strips it automatically (see below); no
