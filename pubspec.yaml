@@ -3,6 +3,25 @@ description: "A Chucker-style HTTP inspector for the Dio client: capture, inspec
 version: 0.3.0
 homepage: https://github.com/alifhasnain/falconer-flutter
 repository: https://github.com/alifhasnain/falconer-flutter
+issue_tracker: https://github.com/alifhasnain/falconer-flutter/issues
+
+# Max 5. These drive pub.dev's /topics browse pages.
+topics:
+  - dio
+  - http
+  - network
+  - debugging
+  - devtools
+
+# Rendered on the pub.dev package page. These files must be inside the published
+# archive, so media/screenshots/ is deliberately NOT listed in .pubignore.
+screenshots:
+  - description: 'Transaction list — method, status, host and duration at a glance.'
+    path: media/screenshots/list.jpg
+  - description: 'Response detail with JSON pretty-printing and in-body search highlighting.'
+    path: media/screenshots/details-search.jpg
+  - description: 'The SwiftUI inspector on iOS, at feature parity with Android.'
+    path: media/screenshots/ios.png
 
 environment:
   sdk: ^3.9.0
