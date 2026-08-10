@@ -9,6 +9,13 @@ JSON pretty-printing, image preview and cURL/text export.
 > behind a platform interface; each platform has a native inspection UI
 > (Jetpack Compose on Android, SwiftUI on iOS).
 
+| Android — Jetpack Compose | iOS — SwiftUI |
+|:---:|:---:|
+| <img src="https://raw.githubusercontent.com/alifhasnain/falconer-flutter/main/media/android_showcase.gif" width="400" alt="Android inspector: transaction list with method, status and timing, opening into detail tabs with in-body search and JSON pretty-printing"> | <img src="https://raw.githubusercontent.com/alifhasnain/falconer-flutter/main/media/ios_showcase.gif" width="400" alt="iOS inspector: the same transaction list and detail tabs rendered in SwiftUI, at feature parity with Android"> |
+
+The same Dart capture pipeline, a native UI on each platform — not a Flutter
+overlay competing with your app's widget tree.
+
 ## Status
 
 **v0.3.0 — development release.** Feature-complete on **Android and iOS**:
@@ -28,7 +35,7 @@ The API is pre-1.0 and may change.
 
 ## Requirements
 
-- Flutter 3.35.4+ / Dart 3.9+
+- Flutter 3.35.0+ / Dart 3.9+
 - Android: `minSdk 21`, `compileSdk 36`, Kotlin 2.1.x, Jetpack Compose
 - iOS: deployment target **15.0+**, SwiftUI (Xcode 15+)
 

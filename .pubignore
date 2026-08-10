@@ -1,0 +1,37 @@
+# Files kept out of the published pub.dev archive.
+#
+# NOTE: once this file exists, pub uses it INSTEAD of .gitignore for packaging.
+# Re-run `flutter pub publish --dry-run` after editing to confirm the file list.
+
+# README GIFs are served from raw.githubusercontent.com, so they never need to
+# ship inside the archive. They live in /media (NOT /doc — .gitignore's `/doc/*`
+# rule would keep them out of git, and the raw URLs would 404).
+#
+# media/screenshots/ is deliberately NOT ignored: the pubspec `screenshots:`
+# field can only reference files that are inside the published package.
+media/*.gif
+
+# Screen-recording sources, wherever they sit. These are also in .gitignore, but
+# .pubignore REPLACES .gitignore for packaging — every rule must be repeated here
+# or the file ships.
+*.mp4
+*.mov
+
+# Internal planning / agent docs.
+RELEASE_PLAN.md
+PRODUCT.md
+CLAUDE.md
+GEMINI.md
+doc/PLAN.md
+IOS_PLAN.md
+.claude/
+.codegraph/
+.kiro/
+.gemini/
+
+# Standard build/tooling output.
+.dart_tool/
+build/
+.idea/
+*.iml
+.DS_Store
