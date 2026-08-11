@@ -16,12 +16,6 @@ JSON pretty-printing, image preview and cURL/text export.
 The same Dart capture pipeline, a native UI on each platform — not a Flutter
 overlay competing with your app's widget tree.
 
-## Status
-
-**v0.3.0 — development release.** Feature-complete on **Android and iOS**:
-capture, storage, the native inspection UI, search and export all work on both.
-The API is pre-1.0 and may change.
-
 ## Features
 
 - One-line setup: add `FalconerInterceptor` to any Dio client; multiple clients
@@ -51,7 +45,7 @@ entry as it is:
 ```yaml
 dependencies:
   dio: ^5.7.0        # already yours; Falconer does not change it
-  falconer: ^0.3.1
+  falconer: ^0.3.2
 ```
 
 Keep `dio` declared even though Falconer depends on it too: your own code

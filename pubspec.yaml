@@ -1,6 +1,6 @@
 name: falconer
 description: "A Chucker-style HTTP inspector for the Dio client: capture, inspect, search and export requests in a native UI. Supports Android and iOS."
-version: 0.3.1
+version: 0.3.2
 homepage: https://github.com/alifhasnain/falconer-flutter
 repository: https://github.com/alifhasnain/falconer-flutter
 issue_tracker: https://github.com/alifhasnain/falconer-flutter/issues

@@ -1,3 +1,12 @@
+## 0.3.2
+
+Documentation only — no code, API or behaviour changes.
+
+* Dropped the `Status` section from the README. It pinned a version number
+  (`v0.3.0`) into prose that no release step updated, so it went stale the
+  moment `0.3.1` shipped. Platform support is already stated in the intro, and
+  pub.dev shows the current version itself.
+
 ## 0.3.1
 
 Documentation only — no code, API or behaviour changes.
