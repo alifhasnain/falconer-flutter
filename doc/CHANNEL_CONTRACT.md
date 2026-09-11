@@ -91,7 +91,7 @@ Swift. `?` marks nullable / may-be-absent fields.
 | `requestHeaders` | Map<String,String> | no | flattened; redaction already applied |
 | `requestContentType` | String | yes | |
 | `requestContentLength` | int | yes | `content-length` header else encoded size |
-| `requestBody` | String | yes | text/json/multipart summary; null for image/none |
+| `requestBody` | String | yes | the body to display: text/json/multipart summary, or a decoder's output; null for image/none |
 | `requestBodyKind` | String | no | one of the body kinds |
 
 ### `logResponse`
@@ -107,13 +107,21 @@ Swift. `?` marks nullable / may-be-absent fields.
 | `responseHeaders` | Map<String,String> | no | flattened; redaction already applied |
 | `responseContentType` | String | yes | |
 | `responseContentLength` | int | yes | header else encoded size |
-| `responseBody` | String | yes | null on the image path |
+| `responseBody` | String | yes | the body to display; null on the image path unless a decoder claimed it |
 | `responseBodyKind` | String | yes | one of the body kinds |
 | `responseImageBytes` | Uint8List | yes | image path only, `<= maxContentLength` |
 
 > HTTP errors (4xx/5xx) carry a full response, so the interceptor emits
 > `logResponse` for them (real status + body). `logError` is reserved for
 > response-less transport failures.
+
+> **Body decoders** (`FalconerConfig.bodyDecoders`, 0.4.0) do not change this
+> contract. A decoded body is written into the existing `requestBody` /
+> `responseBody` keys, whose meaning is already "the body to display" — a
+> `String?` parsed identically whether it holds ciphertext or plaintext. The
+> `*BodyKind` keys are unchanged too: a decoded body keeps the kind of what was
+> captured. Carrying the decoder's name and the original body across the
+> channel is phase 2 of `BODY_DECODER_PROPOSAL.md` and does add keys.
 
 ### `logError`
 

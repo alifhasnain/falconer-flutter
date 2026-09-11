@@ -26,6 +26,8 @@ overlay competing with your app's widget tree.
 - Export a transaction as cURL or text, or save it to a `.txt` file.
 - Room-backed storage with configurable retention and a live transaction count.
 - Notification entry point that opens the inspector in its own task.
+- Body decoders: make application-layer-encrypted payloads readable, and exclude
+  individual transactions from capture entirely.
 
 ## Requirements
 
@@ -121,6 +123,108 @@ Call `Falconer.launchUi()` from anywhere, or:
 - **iOS** — **shake the device** (debug builds), since iOS has no
   notification-to-task model. `showNotification` is a no-op on iOS.
 
+### 4. Apps with encrypted payloads
+
+If your app encrypts request and response bodies at the application layer — the
+norm for banking, payment-gateway and telco apps — Falconer captures the
+ciphertext, and every transaction reads like this:
+
+```json
+{"data":"WlhoaGJYQnNaUzFqYVhCb1pYSjBaWGgwTFc1dmRDMWhJSEpsWVd3dGEyVjVQVDA9"}
+```
+
+Register a `FalconerBodyDecoder` to make those bodies readable. It receives a
+`FalconerBodyContext` and returns the text to display, or `null` to decline:
+
+```dart
+import 'dart:convert';
+
+import 'package:falconer/falconer.dart';
+
+class EnvelopeDecoder implements FalconerBodyDecoder {
+  const EnvelopeDecoder();
+
+  @override
+  String get name => 'AES envelope';
+
+  @override
+  String? decodeRequest(FalconerBodyContext context) => _decode(context);
+
+  @override
+  String? decodeResponse(FalconerBodyContext context) => _decode(context);
+
+  String? _decode(FalconerBodyContext context) {
+    // Only the `data` member is ciphertext; the wrapper is already plaintext.
+    final raw = context.raw;
+    if (raw is! Map) return null;
+    final cipherText = raw['data'];
+    if (cipherText is! String || cipherText.isEmpty) return null;
+
+    final plainText = MyCryptor.decrypt(cipherText); // your app's own cryptor
+    if (plainText == null) return null;
+
+    // Copy — never mutate `context.raw`; it is your app's live object.
+    final out = Map<String, dynamic>.from(raw)..['data'] = jsonDecode(plainText);
+    return const JsonEncoder.withIndent('  ').convert(out);
+  }
+}
+
+await Falconer.configure(
+  const FalconerConfig(bodyDecoders: [EnvelopeDecoder()]),
+);
+```
+
+Rules of the seam:
+
+- **`null` means "not mine".** The next decoder is tried; if all decline, the
+  raw captured body is stored. Most apps send some endpoints unencrypted —
+  reference data, version checks — and declining is how you keep those readable
+  as themselves. Declining runs on every captured body, so make it cheap.
+- **Decoders never mutate your data.** `context.raw` is the live object Dio was
+  handed. Copy before you rewrite it; Falconer's own no-mutation guarantee
+  depends on decoders honouring this.
+- **A decoder that throws is skipped** and the chain continues, so a decoder bug
+  cannot surface in your app. The worst case is a transaction shown with its raw
+  body.
+- **Decoders are synchronous** and run on the calling isolate inside the
+  interceptor. If your decryption is genuinely expensive, do it in your own code
+  and stash the result on `options.extra`, which the decoder reads back from
+  `context.extra`.
+
+`context` also carries `direction`, `method`, `uri`, `statusCode`, `kind`,
+`contentType`, the **unredacted** headers (a decoder may need one to pick a key)
+and `extra`, so a decoder can branch on your own per-request flags:
+
+```dart
+if (context.extra['isEncrypted'] == false) return null;
+```
+
+Two per-transaction opt-outs are available on `RequestOptions.extra`:
+
+| Key | Effect |
+|---|---|
+| `FalconerExtras.skipDecode` | capture normally, run no decoders |
+| `FalconerExtras.skipCapture` | do not capture the transaction at all |
+
+```dart
+await dio.post(
+  '/card/enrol',
+  data: payload,
+  options: Options(extra: {FalconerExtras.skipCapture: true}),
+);
+```
+
+**Security.** A decoder writes **plaintext into the on-device store** — that is
+the point of it, and it inverts the risk profile of an encrypted app, whose
+stored transactions were previously worthless to an attacker. It is only
+defensible because capture is impossible in release builds. For endpoints
+carrying full card data, PINs or OTPs, use `FalconerExtras.skipCapture`: not
+storing a payload beats masking one. Body-content redaction is not implemented
+yet, so a decoded PAN is stored verbatim in a debug build. A decoder must get
+its keys the way your app already does — obfuscated build-time injection, the
+platform keystore — never hard-coded beside the decoder. And never log decoded
+content: Falconer does not, and neither should your `decrypt`.
+
 ## Security & data privacy
 
 Falconer persists captured HTTP data **on the device**.
@@ -133,9 +237,12 @@ Falconer persists captured HTTP data **on the device**.
   `Authorization`, `Cookie`, `Set-Cookie`, `Proxy-Authorization`, `X-Api-Key`,
   `X-Auth-Token` by default; secrets never reach native logs or the database.
 - **Do not capture cardholder data (PAN/CVV) or other regulated PII.** In
-  payment/PCI-DSS contexts, exclude such endpoints from capture. Body-content
-  redaction is not yet implemented — only header *names* are redacted, so a PAN
-  inside a JSON body is stored verbatim in a debug build.
+  payment/PCI-DSS contexts, exclude such endpoints from capture — set
+  `FalconerExtras.skipCapture` on the request's `extra` map and no row is
+  created at all. Body-content redaction is not yet implemented — only header
+  *names* are redacted, so a PAN inside a JSON body is stored verbatim in a
+  debug build. This matters more once you register a body decoder: see
+  [Apps with encrypted payloads](#4-apps-with-encrypted-payloads).
 - **Captured data never leaves the device.** Falconer has no remote/network sink
   by design — there is no code path that transmits captured traffic anywhere.
 - **The inspector is physically absent from release builds on both platforms.**
@@ -177,7 +284,11 @@ as defence in depth.
 
 See [`example/`](example/) — a demo app with two Dio clients sharing one list,
 configuration with header redaction, and buttons that exercise JSON / form /
-image / error / slow requests.
+image / error / slow requests. Two of them cover this release:
+**Encrypted POST** sends a ciphertext envelope that
+[`demo_decoder.dart`](example/lib/demo_decoder.dart) makes readable, and
+**Skipped POST** opts out with `FalconerExtras.skipCapture`, so the captured
+count does not move.
 
 ## License
 

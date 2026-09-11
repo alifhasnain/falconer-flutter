@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 
+import '../capture/falconer_extras.dart';
 import '../capture/transaction_dto.dart';
 import '../capture/transaction_sink.dart';
 import '../falconer_runtime.dart';
@@ -20,6 +21,10 @@ const String _startKey = '__falconer_start';
 /// Multiple interceptor instances funnel into one shared [FalconerSink], so
 /// traffic from several Dio clients appears in a single store. Capture never
 /// mutates `response.data` and never throws into the Dio chain.
+///
+/// A single transaction can opt out with `FalconerExtras.skipCapture` on its
+/// `RequestOptions.extra`; no request, response or error row is then created
+/// for it.
 class FalconerInterceptor extends Interceptor {
   /// Creates an interceptor. [sink] defaults to the shared platform sink;
   /// inject a fake in tests.
@@ -34,6 +39,13 @@ class FalconerInterceptor extends Interceptor {
   void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
     // Zero-overhead short-circuit (Phase 7 owns `captureEnabled`).
     if (!captureEnabled) {
+      handler.next(options);
+      return;
+    }
+    // Opting out here is enough for the whole transaction: without an id on
+    // `extra`, the response and error legs find nothing to correlate and skip
+    // themselves.
+    if (FalconerExtras.isSet(options.extra, FalconerExtras.skipCapture)) {
       handler.next(options);
       return;
     }

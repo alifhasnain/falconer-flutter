@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:falconer/falconer.dart';
 
 import 'api_clients.dart' as api;
+import 'demo_decoder.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -10,11 +11,13 @@ Future<void> main() async {
   // the native engine is absent from release binaries (see README).
   //
   // Demo config: debug capture with strong header redaction plus a custom
-  // secret header, kept for one day.
+  // secret header, kept for one day, and a body decoder so the "Encrypted
+  // POST" call is readable in the inspector instead of showing ciphertext.
   await Falconer.configure(
     FalconerConfig(
       redactHeaders: {...FalconerConfig.defaultRedactHeaders, 'X-Demo-Secret'},
       retention: RetentionPeriod.oneDay,
+      bodyDecoders: const [DemoEnvelopeDecoder()],
     ),
   );
 
@@ -112,7 +115,22 @@ class HomeScreen extends StatelessWidget {
                 onPressed: () => _run(context, 'Slow 3s', api.slowRequest),
                 child: const Text('Slow 3s'),
               ),
+              FilledButton.tonal(
+                onPressed: () =>
+                    _run(context, 'Encrypted POST', api.encryptedPost),
+                child: const Text('Encrypted POST'),
+              ),
+              FilledButton.tonal(
+                onPressed: () => _run(context, 'Skipped POST', api.skippedPost),
+                child: const Text('Skipped POST'),
+              ),
             ],
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            '"Encrypted POST" sends a ciphertext envelope — a body decoder makes '
+            'it readable. "Skipped POST" opts out with '
+            'FalconerExtras.skipCapture, so the count does not move.',
           ),
           const SizedBox(height: 24),
           const Text(

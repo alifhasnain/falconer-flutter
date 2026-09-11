@@ -4,6 +4,10 @@
 /// [Falconer] / `FalconerPlatform` in `lib/src/`.
 library;
 
+export 'src/capture/body_codec.dart' show BodyKind;
+export 'src/capture/body_decoder.dart'
+    show FalconerBodyContext, FalconerBodyDecoder, FalconerDirection;
+export 'src/capture/falconer_extras.dart' show FalconerExtras;
 export 'src/config/falconer_config.dart' show FalconerConfig;
 export 'src/config/retention_period.dart' show RetentionPeriod;
 export 'src/falconer.dart' show Falconer;

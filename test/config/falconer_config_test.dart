@@ -10,6 +10,7 @@ void main() {
       expect(c.retention, RetentionPeriod.oneWeek);
       expect(c.showNotification, true);
       expect(c.redactHeaders, contains('Authorization'));
+      expect(c.bodyDecoders, isEmpty);
     });
 
     test('resolveEnabled honours enabled in debug', () {
@@ -60,6 +61,18 @@ void main() {
       expect(m['showNotification'], false);
       expect(m['redactHeaders'], containsAll(['Authorization', 'Cookie']));
     });
+
+    test('bodyDecoders survives copyWith and never reaches the wire', () {
+      final decoder = _NoopDecoder();
+      final c = const FalconerConfig().copyWith(bodyDecoders: [decoder]);
+
+      expect(c.bodyDecoders, [decoder]);
+      expect(c.copyWith(maxContentLength: 1).bodyDecoders, [decoder]);
+      // Only primitives cross the channel — a decoder cannot be serialised and
+      // the native side has nothing to do with it.
+      expect(c.toMap().keys, isNot(contains('bodyDecoders')));
+      expect(c.toMap().values.any((v) => v is FalconerBodyDecoder), isFalse);
+    });
   });
 
   group('runtime', () {
@@ -74,4 +87,15 @@ void main() {
       expect(runtime.captureEnabled, isTrue);
     });
   });
+}
+
+class _NoopDecoder implements FalconerBodyDecoder {
+  @override
+  String get name => 'noop';
+
+  @override
+  String? decodeRequest(FalconerBodyContext context) => null;
+
+  @override
+  String? decodeResponse(FalconerBodyContext context) => null;
 }

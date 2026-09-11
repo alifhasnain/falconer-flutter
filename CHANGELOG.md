@@ -1,3 +1,64 @@
+## 0.4.0
+
+Body decoders — the first phase of `doc/BODY_DECODER_PROPOSAL.md`. Dart-only:
+no channel keys change, so this release pairs with the existing native
+artifacts untouched.
+
+* **`FalconerBodyDecoder` seam.** Apps that encrypt, compress or otherwise
+  obscure their payloads at the application layer — the norm in banking,
+  payment-gateway and telco apps — captured ciphertext and got no value from
+  the body panes. Register decoders via `FalconerConfig.bodyDecoders`; each
+  receives a `FalconerBodyContext` and returns the text to display, or `null`
+  to decline.
+
+  Declining is first-class, not an error path: most such apps send some
+  endpoints in the clear, and a decoder that returns `null` hands the body to
+  the next decoder, or leaves it raw if all decline. An empty string is a
+  successful decode of an empty body, not a decline.
+
+* **`FalconerBodyContext`** carries `direction`, `method`, `uri`, `statusCode`,
+  `kind`, `contentType`, the encoded body text, raw bytes where the body was
+  binary, the host's `RequestOptions.extra`, and the original Dart object as
+  `raw` — so a partial envelope (`{code, message, data: "<ciphertext>"}`) can
+  be rewritten one member at a time without re-parsing. Headers are the raw,
+  unredacted values, since a decoder may need one to pick a key or a scheme
+  version; redaction still applies to what is stored.
+
+  `headers` and `extra` are unmodifiable views. `raw` is the host's live object
+  and is read-only by contract — Falconer's no-mutation guarantee depends on
+  decoders copying before they rewrite.
+
+* **Failure policy.** A decoder that throws — including from its `name` getter
+  — is skipped and the chain continues, so the worst case is a transaction
+  logged with its raw body. Nothing propagates into the Dio chain.
+
+* **Per-transaction opt-outs** on `RequestOptions.extra`, as `FalconerExtras`
+  constants: `skipDecode` captures normally but runs no decoders;
+  `skipCapture` suppresses the transaction entirely — no request, response or
+  error row. `skipCapture` is the control to reach for on endpoints carrying
+  card data or PINs: not storing a payload is stronger than masking one.
+
+* **Pipeline order is pinned by tests:** encode → decode → truncate → payload
+  map → channel. Decoded text is truncated against its own byte length, so a
+  body that only becomes over-cap after decoding is still capped; the reported
+  content length stays the original wire size either way.
+
+* Decoders are Dart-side only and are absent from `toMap()` — nothing about
+  them crosses the platform channel.
+
+### Security
+
+A decoder writes **plaintext into the on-device store**, which inverts the risk
+profile of an encrypted app: transactions that were previously ciphertext, and
+worthless to an attacker with the device, become readable payment traffic. This
+is only defensible because capture is impossible in release builds — the
+storage engine is physically absent from release binaries.
+
+Body-content redaction is still not implemented (it is phase 2 of the
+proposal), so a decoded PAN or PIN is stored verbatim in a debug build. Until
+then, exclude those endpoints with `FalconerExtras.skipCapture`. Falconer never
+logs decoded content, on any path, including failures.
+
 ## 0.3.2
 
 Documentation only — no code, API or behaviour changes.
